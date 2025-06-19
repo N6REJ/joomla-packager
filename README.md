@@ -1,2 +1,2 @@
-# Joomla Module Packager
-Joomla Module packager for releasing modules
+# Joomla Packager
+Github action to create Joomla extnsions into a release package complete with changelog and updater
