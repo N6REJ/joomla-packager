@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="module" version="4.0" client="site" method="upgrade">
+    <name>MOD_TEST</name>
+    <author>Test Author</author>
+    <creationDate>January 2024</creationDate>
+    <copyright>Copyright (C) 2024 Test Company</copyright>
+    <license>GNU General Public License version 2 or later</license>
+    <authorEmail>test@example.com</authorEmail>
+    <authorUrl>https://example.com</authorUrl>
+    <version>1.0.0</version>
+    <description>MOD_TEST_XML_DESCRIPTION</description>
+    
+    <files>
+        <filename module="mod_test">mod_test.php</filename>
+        <filename>helper.php</filename>
+        <folder>tmpl</folder>
+        <folder>css</folder>
+        <folder>js</folder>
+        <folder>language</folder>
+    </files>
+    
+    <languages folder="language">
+        <language tag="en-GB">en-GB/mod_test.ini</language>
+        <language tag="en-GB">en-GB/mod_test.sys.ini</language>
+    </languages>
+    
+    <config>
+        <fields name="params">
+            <fieldset name="basic">
+                <field
+                    name="test_param"
+                    type="text"
+                    label="MOD_TEST_PARAM_LABEL"
+                    description="MOD_TEST_PARAM_DESC"
+                    default="Hello World"
+                />
+            </fieldset>
+        </fields>
+    </config>
+</extension>

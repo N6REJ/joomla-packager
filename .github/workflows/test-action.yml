@@ -1,0 +1,221 @@
+name: Test Composite Action
+
+on:
+  push:
+    paths:
+      - '.github/actions/joomla-packager/**'
+      - '.github/workflows/test-action.yml'
+  pull_request:
+    paths:
+      - '.github/actions/joomla-packager/**'
+      - '.github/workflows/test-action.yml'
+  workflow_dispatch:
+
+jobs:
+  test-action-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Validate action.yml
+        run: |
+          # Check if action.yml exists and is valid YAML
+          if [ ! -f ".github/actions/joomla-packager/action.yml" ]; then
+            echo "Error: action.yml not found"
+            exit 1
+          fi
+          
+          # Basic YAML validation
+          python3 -c "import yaml; yaml.safe_load(open('.github/actions/joomla-packager/action.yml'))"
+          echo "✅ action.yml is valid YAML"
+      
+      - name: Check required files
+        run: |
+          REQUIRED_FILES=(
+            ".github/actions/joomla-packager/action.yml"
+            ".github/actions/joomla-packager/README.md"
+          )
+          
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Error: Required file $file not found"
+              exit 1
+            fi
+          done
+          echo "✅ All required files present"
+
+  test-with-mock-module:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create mock module structure
+        run: |
+          mkdir -p mock-module/{tmpl,css,js,language/en-GB}
+          
+          # Create mock XML
+          cat > mock-module/mod_mock.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <extension type="module" version="4.0" client="site" method="upgrade">
+              <name>Mock Module</name>
+              <author>Test</author>
+              <creationDate>January 2024</creationDate>
+              <copyright>Copyright (C) 2024 Test</copyright>
+              <license>GPL</license>
+              <version>1.0.0</version>
+              <description>Mock module for testing</description>
+              <files>
+                  <filename module="mod_mock">mod_mock.php</filename>
+                  <folder>tmpl</folder>
+              </files>
+          </extension>
+          EOF
+          
+          # Create mock PHP file
+          cat > mock-module/mod_mock.php << 'EOF'
+          <?php
+          /**
+           * @version     1.0.0
+           * @copyright   Copyright (C) 2024 Test
+           */
+          defined('_JEXEC') or die;
+          EOF
+          
+          # Create mock template
+          echo "<div>Mock Module</div>" > mock-module/tmpl/default.php
+      
+      - name: Test packaging action
+        id: test-package
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_mock'
+          extension-xml: 'mock-module/mod_mock.xml'
+          extension-type: 'module'
+          author: 'Test Author'
+          copyright-holder: 'Test Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          package-dir: 'mock-module/package'
+          create-release: 'false'  # Don't create actual releases in tests
+          upload-artifact: 'false'
+          update-joomla-server: 'false'
+      
+      - name: Verify outputs
+        run: |
+          echo "Testing outputs..."
+          
+          if [ -z "${{ steps.test-package.outputs.version }}" ]; then
+            echo "Error: Version output is empty"
+            exit 1
+          fi
+          
+          if [ -z "${{ steps.test-package.outputs.creation-date }}" ]; then
+            echo "Error: Creation date output is empty"
+            exit 1
+          fi
+          
+          echo "✅ Version: ${{ steps.test-package.outputs.version }}"
+          echo "✅ Creation Date: ${{ steps.test-package.outputs.creation-date }}"
+      
+      - name: Verify package creation
+        run: |
+          if [ ! -f "mock-module/package/mod_mock_${{ steps.test-package.outputs.version }}.zip" ]; then
+            echo "Error: Package ZIP not created"
+            exit 1
+          fi
+          
+          echo "✅ Package created successfully"
+          ls -la mock-module/package/
+
+  test-different-extensions:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        extension-type: [module, plugin, component]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Create mock ${{ matrix.extension-type }}
+        run: |
+          case "${{ matrix.extension-type }}" in
+            module)
+              PREFIX="mod_test"
+              ;;
+            plugin)
+              PREFIX="plg_system_test"
+              ;;
+            component)
+              PREFIX="com_test"
+              ;;
+          esac
+          
+          mkdir -p "mock-${{ matrix.extension-type }}"
+          
+          # Create XML
+          cat > "mock-${{ matrix.extension-type }}/${PREFIX}.xml" << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <extension type="${{ matrix.extension-type }}" version="4.0">
+              <name>${PREFIX}</name>
+              <author>Test</author>
+              <creationDate>January 2024</creationDate>
+              <copyright>Copyright (C) 2024 Test</copyright>
+              <version>1.0.0</version>
+              <description>Test ${{ matrix.extension-type }}</description>
+          </extension>
+          EOF
+          
+          # Create main PHP file
+          cat > "mock-${{ matrix.extension-type }}/${PREFIX}.php" << EOF
+          <?php
+          /**
+           * @version     1.0.0
+           * @copyright   Copyright (C) 2024 Test
+           */
+          defined('_JEXEC') or die;
+          EOF
+      
+      - name: Test ${{ matrix.extension-type }} packaging
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: ${{ matrix.extension-type == 'module' && 'mod_test' || (matrix.extension-type == 'plugin' && 'plg_system_test' || 'com_test') }}
+          extension-xml: mock-${{ matrix.extension-type }}/${{ matrix.extension-type == 'module' && 'mod_test' || (matrix.extension-type == 'plugin' && 'plg_system_test' || 'com_test') }}.xml
+          extension-type: ${{ matrix.extension-type }}
+          author: 'Test'
+          copyright-holder: 'Test'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          create-release: 'false'
+          upload-artifact: 'false'
+          update-joomla-server: 'false'
+
+  summary:
+    needs: [test-action-syntax, test-with-mock-module, test-different-extensions]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Test Summary
+        run: |
+          echo "# 🧪 Composite Action Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Action Syntax | ${{ needs.test-action-syntax.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Mock Module Test | ${{ needs.test-with-mock-module.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Extension Types Test | ${{ needs.test-different-extensions.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.test-action-syntax.result }}" == "success" ] && \
+             [ "${{ needs.test-with-mock-module.result }}" == "success" ] && \
+             [ "${{ needs.test-different-extensions.result }}" == "success" ]; then
+            echo "## ✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Some tests failed" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,70 @@
+name: Test Module Packaging
+
+on:
+  workflow_dispatch:
+    inputs:
+      test-mode:
+        description: 'Run in test mode (no actual release)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  test-packaging:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    defaults:
+      run:
+        working-directory: test-module
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Package Test Module
+        id: package
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_test'
+          extension-xml: 'test-module/mod_test.xml'
+          extension-type: 'module'
+          author: 'Test Author'
+          copyright-holder: 'Test Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Override some defaults for testing
+          create-release: ${{ !inputs.test-mode }}
+          upload-artifact: 'true'
+          package-dir: 'test-module/package'
+      
+      - name: Display Results
+        run: |
+          echo "## Test Module Packaging Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Version Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.package.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Creation Date**: ${{ steps.package.outputs.creation-date }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package Path**: ${{ steps.package.outputs.package-path }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.test-mode }}" == "true" ]; then
+            echo "### Test Mode" >> $GITHUB_STEP_SUMMARY
+            echo "Running in test mode - no release was created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Release Information" >> $GITHUB_STEP_SUMMARY
+            echo "- **Release URL**: ${{ steps.package.outputs.release-url }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Package Contents" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          if [ -d "package" ]; then
+            ls -la package/ >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "```" >> $GITHUB_STEP_SUMMARY
