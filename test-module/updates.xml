@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+    <update>
+        <name>Test Module</name>
+        <description>Test Module Update</description>
+        <element>mod_test</element>
+        <type>module</type>
+        <version>1.0.0</version>
+        <downloads>
+            <downloadurl type="full" format="zip">https://example.com/mod_test_1.0.0.zip</downloadurl>
+        </downloads>
+        <tags>
+            <tag>stable</tag>
+        </tags>
+        <maintainer>Test Company</maintainer>
+        <maintainerurl>https://example.com</maintainerurl>
+        <targetplatform name="joomla" version="4.*" />
+        <client>site</client>
+    </update>
+</updates>

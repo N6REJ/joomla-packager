@@ -1,0 +1,18 @@
+/**
+ * Test Module Styles
+ * @version 1.0.0
+ * Copyright (C) 2024 Test Company
+ */
+
+.mod-test {
+    padding: 20px;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.mod-test p {
+    margin: 0;
+    font-size: 16px;
+    color: #333;
+}

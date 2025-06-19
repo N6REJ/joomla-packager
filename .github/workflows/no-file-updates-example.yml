@@ -1,0 +1,137 @@
+name: Package Without File Updates Example
+
+on:
+  workflow_dispatch:
+    inputs:
+      update-files:
+        description: 'Update version and copyright in files'
+        required: false
+        default: true
+        type: boolean
+      
+      version:
+        description: 'Version to use (leave empty for automatic)'
+        required: false
+        type: string
+
+jobs:
+  package-without-updates:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      
+      - name: Package Extension
+        id: package
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_example'
+          extension-xml: 'mod_example.xml'
+          extension-type: 'module'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GH_PAT }}
+          file-updates: ${{ inputs.update-files }}
+          manual-version: ${{ inputs.version }}
+      
+      - name: Check for file changes
+        id: check-changes
+        run: |
+          if git diff --exit-code; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "✅ No files were modified"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "📝 Files were modified:"
+            git diff --name-only
+          fi
+      
+      - name: Summary
+        run: |
+          echo "## 📦 Package Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **File Updates**: ${{ inputs.update-files && 'Enabled' || 'Disabled' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.package.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files Modified**: ${{ steps.check-changes.outputs.has_changes == 'true' && 'Yes' || 'No' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ inputs.update-files }}" == "false" ]; then
+            echo "### ℹ️ File Updates Disabled" >> $GITHUB_STEP_SUMMARY
+            echo "The package was created without modifying any source files." >> $GITHUB_STEP_SUMMARY
+            echo "Version and copyright information in the files remain unchanged." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ File Updates Enabled" >> $GITHUB_STEP_SUMMARY
+            echo "Version and copyright information were updated in all applicable files." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # Example: Use case for disabled file updates
+  staged-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      
+      - name: Create Beta Package
+        id: beta
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_example'
+          extension-xml: 'mod_example.xml'
+          extension-type: 'module'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GH_PAT }}
+          manual-version: '2.0.0-beta.1'
+          file-updates: 'false'  # Don't update files for beta
+          create-release: 'false'  # Don't create release yet
+          upload-artifact: 'true'
+      
+      - name: Run Tests
+        run: |
+          echo "Running tests on beta package..."
+          # Add your test commands here
+      
+      - name: Create Final Release
+        if: success()
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_example'
+          extension-xml: 'mod_example.xml'
+          extension-type: 'module'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GH_PAT }}
+          manual-version: '2.0.0'
+          file-updates: 'true'  # Update files for final release
+          create-release: 'true'
+      
+      - name: Commit final changes
+        if: success()
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
+          if git diff --exit-code; then
+            echo "No changes to commit"
+          else
+            git add .
+            git commit -m "Release version 2.0.0 [skip ci]"
+            git push origin main
+          fi
