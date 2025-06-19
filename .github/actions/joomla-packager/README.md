@@ -30,10 +30,12 @@ Below is a detailed explanation of all inputs supported by this action:
 - **author** (string, optional):
   - Description: Author name or handle. If not specified, uses the repository owner.
   - Default: `''`
-- **copyright-holder** (string, required):
-  - Description: Copyright string (e.g. `Your Name (YourHandle)`).
-- **copyright-start-year** (string, required):
-  - Description: Copyright start year (e.g. `2024`).
+- **copyright-holder** (string, optional):
+  - Description: Copyright string (e.g. `Your Name (YourHandle)`). If omitted, copyright update steps will be skipped.
+  - Default: `''`
+- **copyright-start-year** (string, optional):
+  - Description: Copyright start year (e.g. `2024`). If omitted, copyright update steps will be skipped.
+  - Default: `''`
 
 ### Version Control
 - **github-token** (string, required):
@@ -112,7 +114,15 @@ If `extension-type` is `component`, the action will:
   - `site` at root (and its `src`, `tmpl`, `language(s)`)
   - `media`, `services`, `forms`, `lib`/`libraries`, `helpers`/`helper` at root
 
-If the required folders are missing, the action will fail and print an error. Warnings are printed for recommended folders.
+If any of these optional folders exist (including `media`), they will be included in the package automatically. The `media` directory is always included for any extension type (module, plugin, or component) if it exists. If the required folders are missing, the action will fail and print an error. Warnings are printed for recommended folders.
+
+## Excluding Unnecessary Files
+
+The action automatically excludes the following from your package:
+- `.git/`, `.github/`, `.DS_Store`, `Thumbs.db`, `node_modules/`, and `.packagerignore` itself
+- Any files or directories listed in a `.packagerignore` file at the root of your repository (if present)
+
+The `.packagerignore` file works like a `.gitignore`—add one pattern per line to exclude files or folders from the package. Lines starting with `#` are treated as comments.
 
 ## Outputs
 - `version`: The generated version number
@@ -139,10 +149,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Joomla Packager
-        uses: ./.github/actions/joomla-packager
+        uses: N6REJ/joomla-packager@latest
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_PAT }}
           copyright-holder: 'Your Name (YourHandle)'
           copyright-start-year: '2024'
           # Optional: override extension-type, extension-name, etc.
 ```
+
+> **Note:**
+> Replace `latest` with a specific version tag (e.g. `v1.0.0`) for production workflows to ensure stability.
+> 
+> **Authentication:**
+> You must create a Personal Access Token (PAT) with appropriate permissions (e.g. `repo`, `workflow`) and add it to your repository secrets as `GH_PAT`. The default `GITHUB_TOKEN` does not have sufficient permissions for some release and artifact operations.

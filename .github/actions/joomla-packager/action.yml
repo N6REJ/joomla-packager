@@ -24,10 +24,12 @@ inputs:
     default: ''
   copyright-holder:
     description: 'Copyright string (e.g. YourName (YourHandle))'
-    required: true
+    required: false
+    default: ''
   copyright-start-year:
     description: 'Copyright start year'
-    required: true
+    required: false
+    default: ''
   
   # Version control
   github-token:
@@ -428,38 +430,36 @@ runs:
         
         # Create package directory
         mkdir -p ${{ inputs.package-dir }}/$EXTENSION_NAME
-        
-        # Copy main files
-        cp ${EXTENSION_NAME}.php ${{ inputs.package-dir }}/$EXTENSION_NAME/ || true
+
+        # Prepare rsync exclude patterns
+        EXCLUDES=(
+          --exclude='.git/'
+          --exclude='.github/'
+          --exclude='.DS_Store'
+          --exclude='Thumbs.db'
+          --exclude='node_modules/'
+          --exclude='.packagerignore'
+        )
+        # If .packagerignore exists, add its patterns
+        if [ -f .packagerignore ]; then
+          while IFS= read -r line; do
+            # Ignore comments and empty lines
+            [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+            EXCLUDES+=(--exclude="$line")
+          done < .packagerignore
+        fi
+
+        # Use rsync to copy everything except excluded files/folders
+        rsync -a . ${{ inputs.package-dir }}/$EXTENSION_NAME/ "${EXCLUDES[@]}"
+
+        # Ensure main files are present (overwrite if needed)
+        cp ${EXTENSION_NAME}.php ${{ inputs.package-dir }}/$EXTENSION_NAME/ 2>/dev/null || true
         cp $EXTENSION_XML ${{ inputs.package-dir }}/$EXTENSION_NAME/
-        
-        # Copy optional files
         if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
         if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
         if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
         if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        
-        # Copy directories
-        if [ -d "${{ inputs.css-dir }}" ]; then cp -r ${{ inputs.css-dir }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        if [ -d "${{ inputs.js-dir }}" ]; then cp -r ${{ inputs.js-dir }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        if [ -d "${{ inputs.tmpl-dir }}" ]; then cp -r ${{ inputs.tmpl-dir }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        if [ -d "${{ inputs.language-dir }}" ]; then cp -r ${{ inputs.language-dir }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        
-        # Handle plugin-specific structure
-        if [ "${{ inputs.extension-type }}" == "plugin" ]; then
-          # Plugins might have additional directories like 'forms', 'fields', etc.
-          if [ -d "forms" ]; then cp -r forms ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-          if [ -d "fields" ]; then cp -r fields ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        fi
-        
-        # Handle component-specific structure
-        if [ "${{ inputs.extension-type }}" == "component" ]; then
-          # Components have admin and site directories
-          if [ -d "admin" ]; then cp -r admin ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-          if [ -d "site" ]; then cp -r site ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-          if [ -d "media" ]; then cp -r media ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-        fi
-        
+
         echo "Package contents:"
         ls -la ${{ inputs.package-dir }}/$EXTENSION_NAME/
         
