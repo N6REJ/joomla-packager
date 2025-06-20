@@ -1,0 +1,28 @@
+# Example workflow for a Joomla plugin
+name: Package and Release Plugin
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      - name: Package Plugin
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'plg_example'
+          extension-xml: 'plg_example.xml'
+          extension-type: 'plugin'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GH_PAT }}

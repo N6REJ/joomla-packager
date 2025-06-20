@@ -241,6 +241,9 @@ You can control features through inputs:
 
 ## Need Help?
 
-- Check the [composite action README](.github/actions/joomla-packager/README.md)
-- Review the [example workflows](.github/workflows/)
+- Check the [composite action README](docs/README.md)
+- Review the [example module workflow](docs/example-module.yml)
+- Review the [example plugin workflow](docs/example-plugin.yml)
+- Review the [example component workflow](docs/example-component.yml)
+- Review the [example package workflow](docs/example-pkg.yml)
 - Open an issue if you encounter problems

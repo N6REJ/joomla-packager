@@ -1,0 +1,28 @@
+# Example workflow for a Joomla module
+name: Package and Release Module
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+      - name: Package Module
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'mod_example'
+          extension-xml: 'mod_example.xml'
+          extension-type: 'module'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
+          copyright-start-year: '2024'
+          github-token: ${{ secrets.GH_PAT }}
