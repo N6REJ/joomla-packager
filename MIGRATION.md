@@ -14,7 +14,7 @@ env:
   REPO: "N6REJ/mod_bears_aichatbot"
   MODULE_NAME: "mod_bears_aichatbot"
   MODULE_XML: "mod_bears_aichatbot.xml"
-  COPYRIGHT_HOLDER: "BearLeeAble (N6REJ)"
+  COPYRIGHT_HOLDER: "N6REJ (N6REJ)"
   COPYRIGHT_START_YEAR: "2025"
   # ... more environment variables
 
@@ -45,7 +45,7 @@ jobs:
           extension-xml: 'mod_bears_aichatbot.xml'
           extension-type: 'module'
           author: 'N6REJ'
-          copyright-holder: 'BearLeeAble (N6REJ)'
+          copyright-holder: 'N6REJ (N6REJ)'
           copyright-start-year: '2025'
           github-token: ${{ secrets.GH_PAT }}
 ```
@@ -91,7 +91,7 @@ jobs:
           extension-xml: 'mod_bears_aichatbot.xml'
           extension-type: 'module'
           author: 'N6REJ'
-          copyright-holder: 'BearLeeAble (N6REJ)'
+          copyright-holder: 'N6REJ (N6REJ)'
           copyright-start-year: '2025'
           github-token: ${{ secrets.GH_PAT }}
       

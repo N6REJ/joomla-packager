@@ -1,18 +1,16 @@
 # Joomla Extension Packager GitHub Action
 
-This GitHub Action packages and releases Joomla extensions (modules, plugins, components) with built-in validation for component structure. All logic and validation is handled within the action—your workflow only needs to call this action.
+This GitHub Action packages and releases Joomla extensions (modules, plugins & components) with built-in validation for extension structure. All logic and validation is handled within the action—your workflow only needs to call this action.
 
 ## Features
 - Packages Joomla modules, plugins, and components
-- Validates component folder structure (admin/administrator, language(s), etc.)
+- Validates extension folder structure (admin/administrator, language(s), etc.)
 - Updates version, copyright, and changelog
 - Creates GitHub releases and uploads artifacts
 - Generates directory tree and changelog files
 
 # Usage
-
 ## Inputs
-
 Below is a detailed explanation of all inputs supported by this action:
 
 ### Extension Identification
@@ -137,24 +135,35 @@ See the usage example above. All you need to do is call this action in your work
 Add the following to your workflow (e.g. `.github/workflows/release.yml`):
 
 ```yaml
-name: Joomla Extension Release
+name: Joomla Extension Packager
 on:
-  push:
-    tags:
-      - '*'
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
-  build:
+  package:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - name: Joomla Packager
-        uses: N6REJ/joomla-packager@latest
         with:
-          github-token: ${{ secrets.GH_PAT }}
-          copyright-holder: 'Your Name (YourHandle)'
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      - uses: N6REJ/joomla-packager@v1
+        with:
+          extension-name: 'mod_example'
+          extension-xml: 'mod_example.xml'
+          extension-type: 'module'
+          author: 'Your Name'
+          copyright-holder: 'Your Company'
           copyright-start-year: '2024'
-          # Optional: override extension-type, extension-name, etc.
+          github-token: ${{ secrets.GH_PAT }}
 ```
 
 > **Note:**
@@ -162,3 +171,17 @@ jobs:
 > 
 > **Authentication:**
 > You must create a Personal Access Token (PAT) with appropriate permissions (e.g. `repo`, `workflow`) and add it to your repository secrets as `GH_PAT`. The default `GITHUB_TOKEN` does not have sufficient permissions for some release and artifact operations.
+
+## 📁 Repository Structure
+
+```
+joomla-packager/
+├── .github/
+│   ├── actions/
+│   │   └── joomla-packager/
+│   │       ├── action.yml          # The composite action
+│   │       └── README.md           # Action documentation
+│   └── workflows/
+│       └── example-usage.yml       # Example workflow
+└── README.md                       # This file
+```

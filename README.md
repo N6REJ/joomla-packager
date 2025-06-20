@@ -16,9 +16,7 @@ A reusable GitHub composite action for packaging and releasing Joomla extensions
 
 ## 📋 Quick Start
 
-1. **Add the action to your repository** by copying the `.github/actions/joomla-packager` directory
-
-2. **Create a workflow** in `.github/workflows/package.yml`:
+1. **Reference the action in your workflow** using the `uses:` field, pointing to the public repository and release/tag (replace `N6REJ/joomla-packager@v1` with the correct owner/repo and version/tag):
 
 ```yaml
 name: Package Extension
@@ -41,7 +39,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
       
-      - uses: ./.github/actions/joomla-packager
+      - uses: N6REJ/joomla-packager@v1
         with:
           extension-name: 'mod_example'
           extension-xml: 'mod_example.xml'
@@ -52,21 +50,8 @@ jobs:
           github-token: ${{ secrets.GH_PAT }}
 ```
 
-3. **Set up your GitHub PAT** in repository secrets as `GH_PAT`
+2. **Set up your GitHub PAT** in repository secrets as `GH_PAT` or whatever you use for `github-token:`
 
-## 📁 Repository Structure
-
-```
-joomla-packager/
-├── .github/
-│   ├── actions/
-│   │   └── joomla-packager/
-│   │       ├── action.yml          # The composite action
-│   │       └── README.md           # Action documentation
-│   └── workflows/
-│       └── example-usage.yml       # Example workflow
-└── README.md                       # This file
-```
 
 ## 🔧 Configuration
 
@@ -86,6 +71,36 @@ joomla-packager/
 
 See the [action README](.github/actions/joomla-packager/README.md) for all available options.
 
+## 🔑 Token Permissions
+
+The `github-token` input (or the default `GITHUB_TOKEN`) is used for creating GitHub Releases, uploading artifacts, updating files, and optionally interacting with pull requests, issues, and GitHub Packages. For the action to perform all its features, the token must have the following permissions:
+
+| Permission           | Why Needed                                                                 |
+|----------------------|----------------------------------------------------------------------------|
+| contents: write      | Create releases, upload release assets, update files in the repository     |
+| pull-requests: write | Update or comment on pull requests (e.g., for changelog or status)         |
+| actions: write       | Trigger or manage other workflows, upload artifacts                        |
+| packages: write      | Publish to GitHub Packages (optional)                                      |
+| issues: write        | Create or comment on issues (optional, e.g., for release notes)            |
+
+- **Minimum required:** `contents: write` (for releases, assets, and file updates)
+- **Recommended for full functionality:** Add `pull-requests: write`, `actions: write`, `packages: write`, and `issues: write` as needed for your workflow.
+- The default `GITHUB_TOKEN` provided by GitHub Actions usually has `contents: write` and `pull-requests: write` by default, but you may need to explicitly set these in your workflow’s `permissions` block for full access.
+- If using a Personal Access Token (PAT), it must have the `repo` scope for private repositories (includes all the above), or at least `public_repo` for public repositories. Add `workflow` and `write:packages` if you need to trigger workflows or publish packages.
+
+**Example permissions block for your workflow:**
+
+```yaml
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  packages: write
+  issues: write
+```
+
+If you encounter permission errors, check your workflow's `permissions` block and your token's scopes.
+
 ## 📝 Commit Message Format
 
 The action categorizes commits based on their prefix:
@@ -101,7 +116,7 @@ The action categorizes commits based on their prefix:
 ### Basic Module Packaging
 
 ```yaml
-- uses: ./.github/actions/joomla-packager
+- uses: N6REJ/joomla-packager@v1
   with:
     extension-name: 'mod_hello_world'
     extension-xml: 'mod_hello_world.xml'
@@ -115,7 +130,7 @@ The action categorizes commits based on their prefix:
 ### Plugin with Custom Directories
 
 ```yaml
-- uses: ./.github/actions/joomla-packager
+- uses: N6REJ/joomla-packager@v1
   with:
     extension-name: 'plg_system_cache'
     extension-xml: 'plg_system_cache.xml'
@@ -132,7 +147,7 @@ The action categorizes commits based on their prefix:
 ### Component with All Features
 
 ```yaml
-- uses: ./.github/actions/joomla-packager
+- uses: N6REJ/joomla-packager@v1
   with:
     extension-name: 'com_myapp'
     extension-xml: 'com_myapp.xml'
@@ -150,7 +165,7 @@ The action categorizes commits based on their prefix:
 ### Using Manual Version
 
 ```yaml
-- uses: ./.github/actions/joomla-packager
+- uses: N6REJ/joomla-packager@v1
   with:
     extension-name: 'mod_example'
     extension-xml: 'mod_example.xml'
@@ -176,7 +191,7 @@ Example with custom deployment:
 ```yaml
 - name: Package Extension
   id: package
-  uses: ./.github/actions/joomla-packager
+  uses: N6REJ/joomla-packager@v1
   with:
     # ... your inputs ...
 
@@ -197,7 +212,7 @@ Contributions are welcome! Feel free to:
 
 ## 📄 License
 
-This project is open source and available under the MIT License.
+This project is open source and available under the GPL3+ License.
 
 ## 🙏 Credits
 
