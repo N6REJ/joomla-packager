@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" version="4.0" method="upgrade">
+    <name>com_testcomponent</name>
+    <version>1.0.0</version>
+    <description>Test Component for Action</description>
+    <files>
+        <filename>index.html</filename>
+    </files>
+</extension>

@@ -241,9 +241,9 @@ You can control features through inputs:
 
 ## Need Help?
 
-- Check the [composite action README](docs/README.md)
-- Review the [example module workflow](docs/example-module.yml)
-- Review the [example plugin workflow](docs/example-plugin.yml)
-- Review the [example component workflow](docs/example-component.yml)
-- Review the [example package workflow](docs/example-pkg.yml)
+- Check the [composite action README](README.md)
+- Review the [example module workflow](example-module.yml)
+- Review the [example plugin workflow](example-plugin.yml)
+- Review the [example component workflow](example-component.yml)
+- Review the [example package workflow](example-pkg.yml)
 - Open an issue if you encounter problems

@@ -1,0 +1,17 @@
+name: Test Plugin Action
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Joomla Packager Action (Plugin)
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'plg_testplugin'
+          extension-xml: 'test-extensions/test-plugin/plg_testplugin.xml'
+          extension-type: 'plugin'

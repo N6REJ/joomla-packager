@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" version="4.0" group="system" method="upgrade">
+    <name>plg_testplugin</name>
+    <version>1.0.0</version>
+    <description>Test Plugin for Action</description>
+    <files>
+        <filename>index.html</filename>
+    </files>
+</extension>

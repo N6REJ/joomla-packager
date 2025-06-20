@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="package" version="4.0">
+    <name>pkg_testpackage</name>
+    <version>1.0.0</version>
+    <description>Test Package for Action</description>
+    <files>
+        <filename>index.html</filename>
+    </files>
+</extension>

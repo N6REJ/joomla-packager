@@ -19,7 +19,7 @@ Thumbs.db
 
 # Test artifacts
 mock-*/
-test-module/package/
+test-extensions/test-module/package/
 
 # Temporary files
 *.tmp

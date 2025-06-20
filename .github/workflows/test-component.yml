@@ -1,0 +1,17 @@
+name: Test Component Action
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Joomla Packager Action (Component)
+        uses: ./.github/actions/joomla-packager
+        with:
+          extension-name: 'com_testcomponent'
+          extension-xml: 'test-extensions/test-component/com_testcomponent.xml'
+          extension-type: 'component'
