@@ -222,3 +222,8 @@ Based on the workflow from [N6REJ/mod_bears_pricing_tables](https://github.com/N
 ---
 
 Made with ❤️ for the Joomla community
+
+## Additional Documentation
+
+For more detailed documentation and usage examples, visit:
+https://www.hallhome.us/joomla-packager
