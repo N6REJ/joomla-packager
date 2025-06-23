@@ -5,5 +5,9 @@
     <description>Test Component for Action</description>
     <files>
         <filename>index.html</filename>
+        <filename>com_testcomponent.php</filename>
+        <filename>controller.php</filename>
+        <folder>views</folder>
+        <folder>tmpl</folder>
     </files>
 </extension>

@@ -5,5 +5,8 @@
     <description>Test Package for Action</description>
     <files>
         <filename>index.html</filename>
+        <!-- Example: include a module and a plugin as part of the package -->
+        <file type="module" id="mod_test" client="site">../test-module/mod_test.xml</file>
+        <file type="plugin" id="plg_testplugin" group="system">../test-plugin/plg_testplugin.xml</file>
     </files>
 </extension>

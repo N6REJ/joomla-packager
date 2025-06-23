@@ -2,8 +2,13 @@
 <extension type="plugin" version="4.0" group="system" method="upgrade">
     <name>plg_testplugin</name>
     <version>1.0.0</version>
-    <description>Test Plugin for Action</description>
+    <description>PLG_SYSTEM_TESTPLUGIN_XML_DESCRIPTION</description>
     <files>
+        <filename>plg_testplugin.php</filename>
         <filename>index.html</filename>
     </files>
+    <languages>
+        <language tag="en-GB">language/en-GB/en-GB.plg_system_testplugin.ini</language>
+        <language tag="en-GB">language/en-GB/en-GB.plg_system_testplugin.sys.ini</language>
+    </languages>
 </extension>
