@@ -1,6 +1,7 @@
 # Joomla Extension Packager
 
-A reusable GitHub composite action for packaging and releasing Joomla extensions. This action automates the entire process of versioning, packaging, and releasing Joomla modules, plugins, and components.
+A reusable GitHub composite action for packaging and releasing Joomla extensions. This action automates the entire process of versioning, packaging, and releasing Joomla modules, plugins, and components.<br>
+there is a workflows version documented here: <a href="https://www.hallhome.us/joomla-packager/packager-documentation">Packager Documentation</a>
 
 ## 🚀 Features
 
