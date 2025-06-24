@@ -16,8 +16,9 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
-      - name: Package Component
-        uses: ./.github/actions/joomla-packager
+      - name: Joomla Extension Packager
+        uses: N6REJ/joomla-packager@2025.6.23
+        id: packager
         with:
           extension-name: 'com_example'
           extension-xml: 'com_example.xml'

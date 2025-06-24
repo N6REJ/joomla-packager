@@ -38,12 +38,11 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
-      
-      - uses: ./.github/actions/joomla-packager
+
+      - name: Joomla Extension Packager
+        uses: N6REJ/joomla-packager@2025.6.23
+        id: packager
         with:
-          extension-name: 'mod_bears_aichatbot'
-          extension-xml: 'mod_bears_aichatbot.xml'
-          extension-type: 'module'
           author: 'N6REJ'
           copyright-holder: 'N6REJ (N6REJ)'
           copyright-start-year: '2025'
@@ -83,13 +82,11 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
-      
-      - name: Package Module
-        uses: ./.github/actions/joomla-packager
+
+      - name: Joomla Extension Packager
+        uses: N6REJ/joomla-packager@2025.6.23
+        id: packager
         with:
-          extension-name: 'mod_bears_aichatbot'
-          extension-xml: 'mod_bears_aichatbot.xml'
-          extension-type: 'module'
           author: 'N6REJ'
           copyright-holder: 'N6REJ (N6REJ)'
           copyright-start-year: '2025'
@@ -104,7 +101,7 @@ jobs:
             echo "No changes to commit"
           else
             git add .
-            git commit -m "Update version to ${{ steps.package.outputs.version }} [skip ci]"
+            git commit -m "Update version to ${{ steps.packager.outputs.version }} [skip ci]"
             git push origin main
           fi
 ```

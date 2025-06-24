@@ -54,9 +54,9 @@ jobs:
           fetch-depth: 0
           token: \${{ secrets.GH_PAT }}
       
-      - name: Package Extension
-        id: package
-        uses: ./.github/actions/joomla-packager
+      - name: Joomla Extension Packager
+        uses: N6REJ/joomla-packager@2025.6.23
+        id: packager
         with:
           extension-name: '$EXT_NAME'
           extension-xml: '$EXT_XML'
