@@ -2,7 +2,7 @@ name: 'Joomla Extension Packager'
 description: 'A composite action to package and release Joomla extensions (modules, plugins, components)'
 author: 'N6REJ'
 
-labels:
+branding:
   icon: 'package'
   color: 'blue'
 
