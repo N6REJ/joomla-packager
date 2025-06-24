@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
       
-      - uses: N6REJ/joomla-packager@v1
+      - uses: N6REJ/joomla-packager@v2025.6.24
         with:
           extension-name: 'mod_example'
           extension-xml: 'mod_example.xml'
