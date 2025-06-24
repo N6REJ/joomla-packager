@@ -51,11 +51,7 @@ jobs:
 
 ## Step-by-Step Migration
 
-### 1. Copy the Composite Action
-
-Copy the `.github/actions/joomla-packager` directory to your repository.
-
-### 2. Update Your Workflow
+### 1. Update Your Workflow
 
 Replace your existing workflow with a simplified version:
 
