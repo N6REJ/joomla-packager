@@ -108,26 +108,35 @@ jobs:
 
 ### 3. Map Environment Variables to Inputs
 
-| Original Env Variable | Composite Action Input |
-|----------------------|------------------------|
-| `AUTHOR` | `author` |
-| `MODULE_NAME` | `extension-name` |
-| `MODULE_XML` | `extension-xml` |
-| `COPYRIGHT_HOLDER` | `copyright-holder` |
-| `COPYRIGHT_START_YEAR` | `copyright-start-year` |
-| `PHP_VERSION` | `php-version` |
-| `MODULE_TOKEN` | `github-token` |
-| `CHANGELOG_FILE` | `changelog-file` |
-| `HELPER_FILE` | `helper-file` |
-| `LICENSE_FILE` | `license-file` |
-| `FAVICON_FILE` | `favicon-file` |
-| `UPDATES_XML_FILE` | `updates-xml-file` |
-| `CSS_DIR` | `css-dir` |
-| `JS_DIR` | `js-dir` |
-| `TMPL_DIR` | `tmpl-dir` |
-| `LANGUAGE_DIR` | `language-dir` |
-| `PACKAGE_DIR` | `package-dir` |
-| `DIR_TREE_FILE` | `dir-tree-file` |
+| Original Env Variable | Composite Action Input | Notes |
+|----------------------|------------------------|-------|
+| `AUTHOR` | `author` | |
+| `MODULE_NAME` | `extension-name` | |
+| `MODULE_XML` | `extension-xml` | |
+| `COPYRIGHT_HOLDER` | `copyright-holder` | |
+| `COPYRIGHT_START_YEAR` | `copyright-start-year` | |
+| `PHP_VERSION` | `php-version` | |
+| `MODULE_TOKEN` | `github-token` | |
+| `CHANGELOG_FILE` | `changelog-file` | |
+| `HELPER_FILE` | `helper-file` | |
+| `LICENSE_FILE` | `license-file` | |
+| `FAVICON_FILE` | `favicon-file` | |
+| `UPDATES_XML_FILE` | `updates-xml-file` | |
+| `CSS_DIR` | `css-dir` | |
+| `JS_DIR` | `js-dir` | |
+| `TMPL_DIR` | `tmpl-dir` | |
+| `LANGUAGE_DIR` | `language-dir` | |
+| `PACKAGE_DIR` | `package-dir` | |
+| `DIR_TREE_FILE` | `dir-tree-file` | |
+| (none) | `extension-type` | Optional, e.g. module, plugin, component |
+| (none) | `manual-version` | Optional, for manual version override |
+| (none) | `file-updates` | Optional, default 'true' |
+| (none) | `generate-changelog` | Optional, default 'true' |
+| (none) | `create-release` | Optional, default 'true' |
+| (none) | `upload-artifact` | Optional, default 'true' |
+| (none) | `update-joomla-server` | Optional, default 'true' |
+
+> **Note:** The inputs listed as `(none)` are new options available in the composite action and do not have direct equivalents in the original workflow. They provide additional flexibility and control over the packaging and release process.
 
 ## Benefits of Migration
 
@@ -169,15 +178,15 @@ You can add custom steps before or after the packaging:
     # Your custom validation logic
     
 - name: Package Module
-  id: package
-  uses: ./.github/actions/joomla-packager
+  uses: N6REJ/joomla-packager@2025.6.23
+  id: packager
   with:
     # ... your inputs
     
 - name: Deploy to server
   run: |
     # Your deployment logic
-    echo "Deploying version ${{ steps.package.outputs.version }}"
+    echo "Deploying version ${{ steps.packager.outputs.version }}"
 ```
 
 ### Using Outputs
@@ -186,16 +195,16 @@ The composite action provides outputs you can use:
 
 ```yaml
 - name: Package Module
-  id: package
-  uses: ./.github/actions/joomla-packager
+  uses: N6REJ/joomla-packager@2025.6.23
+  id: packager
   with:
     # ... your inputs
 
 - name: Use outputs
   run: |
-    echo "Version: ${{ steps.package.outputs.version }}"
-    echo "Package: ${{ steps.package.outputs.package-path }}"
-    echo "Release: ${{ steps.package.outputs.release-url }}"
+    echo "Version: ${{ steps.packager.outputs.version }}"
+    echo "Package: ${{ steps.packager.outputs.package-path }}"
+    echo "Release: ${{ steps.packager.outputs.release-url }}"
 ```
 
 ### Conditional Features
@@ -203,7 +212,7 @@ The composite action provides outputs you can use:
 You can control features through inputs:
 
 ```yaml
-- uses: ./.github/actions/joomla-packager
+- uses: N6REJ/joomla-packager@2025.6.23
   with:
     extension-name: 'mod_example'
     extension-xml: 'mod_example.xml'

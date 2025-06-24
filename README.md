@@ -198,7 +198,7 @@ Example with custom deployment:
 
 - name: Deploy to Production
   run: |
-    echo "Deploying version ${{ steps.package.outputs.version }}"
+    echo "Deploying version ${{ steps.packager.outputs.version }}"
     # Your deployment script here
 ```
 

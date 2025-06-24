@@ -75,7 +75,7 @@ jobs:
             echo "No changes to commit"
           else
             git add .
-            git commit -m "Update version to \${{ steps.package.outputs.version }} [skip ci]"
+            git commit -m "Update version to \${{ steps.packager.outputs.version }} [skip ci]"
             git push origin main
           fi
 EOF

@@ -10,7 +10,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Run Joomla Packager Action (Plugin)
-        uses: ./.github/actions/joomla-packager
+        uses: N6REJ/joomla-packager@2025.6.23
         with:
           extension-name: 'plg_testplugin'
           extension-xml: 'test-extensions/test-plugin/plg_testplugin.xml'
