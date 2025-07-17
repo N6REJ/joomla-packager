@@ -516,7 +516,7 @@ runs:
                     
                     [View full changelog](https://github.com/${{ github.repository }}/blob/main/${{ inputs.changelog-file }})
             env:
-                GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+                GITHUB_TOKEN: ${{ inputs.github-token }}
 
         -   name: Update Joomla update server XML
             if: inputs.update-joomla-server == 'true'
