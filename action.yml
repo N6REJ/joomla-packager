@@ -395,7 +395,7 @@ runs:
                   fi
                 done <<< "$COMMITS"
                 
-                # Always create changelog file, even if empty
+                # Create changelog file
                 echo "# Changelog" > ${{ inputs.changelog-file }}
                 echo "" >> ${{ inputs.changelog-file }}
                 echo "All notable changes to this project will be documented in this file." >> ${{ inputs.changelog-file }}
@@ -516,51 +516,29 @@ runs:
                     
                     [View full changelog](https://github.com/${{ github.repository }}/blob/main/${{ inputs.changelog-file }})
             env:
-                GITHUB_TOKEN: ${{ inputs.github-token }}
+                GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
         -   name: Update Joomla update server XML
             if: inputs.update-joomla-server == 'true'
             shell: bash
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                # Support both updates.xml and update.xml
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
-                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-
+                
+                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
                 
-                  # Update download URL (robust to whitespace/attributes)
-                  sed -i -E "s|<downloadurl[^>]*>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                  # Update download URL
+                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
                 
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
                 else
-                  echo "${UPDATES_XML} not found, creating a new updates.xml file."
-                  cat > "$UPDATES_XML" <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<updates>
-  <update>
-    <name>${EXTENSION_NAME}</name>
-    <description>Update for ${EXTENSION_NAME}</description>
-    <element>${EXTENSION_NAME}</element>
-    <type>extension</type>
-    <version>${{ steps.set_version.outputs.version }}</version>
-    <infourl>https://github.com/${{ github.repository }}</infourl>
-    <downloads>
-      <downloadurl>${DOWNLOAD_URL}</downloadurl>
-    </downloads>
-    <tags/>
-    <maintainer>${{ inputs.author }}</maintainer>
-    <maintainerurl>https://github.com/${{ github.repository_owner }}</maintainerurl>
-    <targetplatform name="joomla" version="5.0"/>
-  </update>
-</updates>
-EOF
-                  echo "Created and populated $UPDATES_XML file."
-                  cat "$UPDATES_XML"
+                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
                 fi
 
         -   name: Upload to GitHub Artifacts
