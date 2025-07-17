@@ -370,10 +370,15 @@ runs:
                 REMOVED=""
                 SECURITY=""
                 
+                # Try to get commits, but always create the file even if git log fails
                 if [ -z "$PREVIOUS_TAG" ]; then
-                  COMMITS=$(git log --pretty=format:"%s|%h" --reverse)
+                  COMMITS=$(git log --pretty=format:"%s|%h" --reverse 2>/dev/null || true)
                 else
-                  COMMITS=$(git log --pretty=format:"%s|%h" ${PREVIOUS_TAG}..HEAD --reverse)
+                  COMMITS=$(git log --pretty=format:"%s|%h" ${PREVIOUS_TAG}..HEAD --reverse 2>/dev/null || true)
+                fi
+                
+                if [ -z "$COMMITS" ]; then
+                  COMMITS=""
                 fi
                 
                 while IFS= read -r line; do
@@ -395,7 +400,7 @@ runs:
                   fi
                 done <<< "$COMMITS"
                 
-                # Create changelog file
+                # Always create changelog file, even if no commits
                 echo "# Changelog" > ${{ inputs.changelog-file }}
                 echo "" >> ${{ inputs.changelog-file }}
                 echo "All notable changes to this project will be documented in this file." >> ${{ inputs.changelog-file }}
@@ -532,8 +537,8 @@ runs:
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
                 
-                  # Update download URL
-                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                  # Update download URL (robust to attributes)
+                  sed -i -E "s|<downloadurl[^>]*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
                 
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
