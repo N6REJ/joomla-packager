@@ -525,22 +525,42 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 # Support both updates.xml and update.xml
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
+                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                elif [ -f "update.xml" ]; then
-                  UPDATES_XML="update.xml"
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                fi
-                if [ -f "$UPDATES_XML" ]; then
-                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                  # Update download URL
-                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                
+                  # Update download URL (robust to whitespace/attributes)
+                  sed -i -E "s|<downloadurl[^>]*>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
                 else
-                  echo "::warning::No update server XML file (updates.xml or update.xml) found in repository"
+                  echo "${UPDATES_XML} not found, creating a new updates.xml file."
+                  cat > "$UPDATES_XML" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+  <update>
+    <name>${EXTENSION_NAME}</name>
+    <description>Update for ${EXTENSION_NAME}</description>
+    <element>${EXTENSION_NAME}</element>
+    <type>extension</type>
+    <version>${{ steps.set_version.outputs.version }}</version>
+    <infourl>https://github.com/${{ github.repository }}</infourl>
+    <downloads>
+      <downloadurl>${DOWNLOAD_URL}</downloadurl>
+    </downloads>
+    <tags/>
+    <maintainer>${{ inputs.author }}</maintainer>
+    <maintainerurl>https://github.com/${{ github.repository_owner }}</maintainerurl>
+    <targetplatform name="joomla" version="5.0"/>
+  </update>
+</updates>
+EOF
+                  echo "Created and populated $UPDATES_XML file."
+                  cat "$UPDATES_XML"
                 fi
 
         -   name: Upload to GitHub Artifacts
