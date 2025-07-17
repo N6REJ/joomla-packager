@@ -385,46 +385,50 @@ runs:
                   COMMIT_MSG=$(echo "$line" | cut -d'|' -f1)
                   COMMIT_HASH=$(echo "$line" | cut -d'|' -f2)
                 
-                  if [[ "$COMMIT_MSG" =~ ^(Add|Create|Implement|Feature) ]]; then
+                  if echo "$COMMIT_MSG" | grep -Eq '^(Add|Create|Implement|Feature)'; then
                     ADDED="$ADDED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
-                  elif [[ "$COMMIT_MSG" =~ ^(Update|Improve|Enhance|Refactor|Change) ]]; then
+                  elif echo "$COMMIT_MSG" | grep -Eq '^(Update|Improve|Enhance|Refactor|Change)'; then
                     CHANGED="$CHANGED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
-                  elif [[ "$COMMIT_MSG" =~ ^(Fix|Bug|Correct|Resolve) ]]; then
+                  elif echo "$COMMIT_MSG" | grep -Eq '^(Fix|Bug|Correct|Resolve)'; then
                     FIXED="$FIXED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
-                  elif [[ "$COMMIT_MSG" =~ ^(Remove|Delete|Deprecate) ]]; then
+                  elif echo "$COMMIT_MSG" | grep -Eq '^(Remove|Delete|Deprecate)'; then
                     REMOVED="$REMOVED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
-                  elif [[ "$COMMIT_MSG" =~ ^(Security) ]]; then
+                  elif echo "$COMMIT_MSG" | grep -Eq '^(Security)'; then
                     SECURITY="$SECURITY\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
                   else
                     CHANGED="$CHANGED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
                   fi
-                done <<< "$COMMITS"
+                done <<EOF
+$COMMITS
+EOF
                 
-                # Always create changelog file, even if no commits
-                echo "# Changelog" > ${{ inputs.changelog-file }}
-                echo "" >> ${{ inputs.changelog-file }}
-                echo "All notable changes to this project will be documented in this file." >> ${{ inputs.changelog-file }}
-                echo "" >> ${{ inputs.changelog-file }}
-                echo "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)," >> ${{ inputs.changelog-file }}
-                echo "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)." >> ${{ inputs.changelog-file }}
-                echo "" >> ${{ inputs.changelog-file }}
-                echo "## [${{ steps.set_version.outputs.version }}] - $CURRENT_DATE" >> ${{ inputs.changelog-file }}
-                echo "" >> ${{ inputs.changelog-file }}
+                # Prepare new version section
+                NEW_SECTION="## [${{ steps.set_version.outputs.version }}] - $CURRENT_DATE\n"
+                [ -n "$ADDED" ] && NEW_SECTION="$NEW_SECTION\n### Added\n$ADDED\n"
+                [ -n "$CHANGED" ] && NEW_SECTION="$NEW_SECTION\n### Changed\n$CHANGED\n"
+                [ -n "$FIXED" ] && NEW_SECTION="$NEW_SECTION\n### Fixed\n$FIXED\n"
+                [ -n "$REMOVED" ] && NEW_SECTION="$NEW_SECTION\n### Removed\n$REMOVED\n"
+                [ -n "$SECURITY" ] && NEW_SECTION="$NEW_SECTION\n### Security\n$SECURITY\n"
+                NEW_SECTION="$NEW_SECTION\n"
                 
-                if [ ! -z "$ADDED" ]; then echo "### Added" >> ${{ inputs.changelog-file }}; echo -e "$ADDED" >> ${{ inputs.changelog-file }}; echo "" >> ${{ inputs.changelog-file }}; fi
-                if [ ! -z "$CHANGED" ]; then echo "### Changed" >> ${{ inputs.changelog-file }}; echo -e "$CHANGED" >> ${{ inputs.changelog-file }}; echo "" >> ${{ inputs.changelog-file }}; fi
-                if [ ! -z "$FIXED" ]; then echo "### Fixed" >> ${{ inputs.changelog-file }}; echo -e "$FIXED" >> ${{ inputs.changelog-file }}; echo "" >> ${{ inputs.changelog-file }}; fi
-                if [ ! -z "$REMOVED" ]; then echo "### Removed" >> ${{ inputs.changelog-file }}; echo -e "$REMOVED" >> ${{ inputs.changelog-file }}; echo "" >> ${{ inputs.changelog-file }}; fi
-                if [ ! -z "$SECURITY" ]; then echo "### Security" >> ${{ inputs.changelog-file }}; echo -e "$SECURITY" >> ${{ inputs.changelog-file }}; echo "" >> ${{ inputs.changelog-file }}; fi
+                HEADER="# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),\nand this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).\n\n"
+                if [ -f "${{ inputs.changelog-file }}" ]; then
+                  # Find where the first version section starts
+                  VERSION_LINE=$(grep -n '^## \[.*\] - ' "${{ inputs.changelog-file }}" | head -n1 | cut -d: -f1)
+                  if [ -n "$VERSION_LINE" ]; then
+                    HEADER_CONTENT=$(head -n $((VERSION_LINE-1)) "${{ inputs.changelog-file }}")
+                    REST_CONTENT=$(tail -n +$VERSION_LINE "${{ inputs.changelog-file }}")
+                  else
+                    HEADER_CONTENT="$HEADER"
+                    REST_CONTENT=""
+                  fi
+                  printf "%s%s%s" "$HEADER_CONTENT" "$NEW_SECTION" "$REST_CONTENT" > "${{ inputs.changelog-file }}"
+                else
+                  printf "%s%s" "$HEADER" "$NEW_SECTION" > "${{ inputs.changelog-file }}"
+                fi
                 
                 # Output for release notes
-                CHANGELOG_OUTPUT=""
-                if [ ! -z "$ADDED" ]; then CHANGELOG_OUTPUT="${CHANGELOG_OUTPUT}### Added\n${ADDED}\n\n"; fi
-                if [ ! -z "$CHANGED" ]; then CHANGELOG_OUTPUT="${CHANGELOG_OUTPUT}### Changed\n${CHANGED}\n\n"; fi
-                if [ ! -z "$FIXED" ]; then CHANGELOG_OUTPUT="${CHANGELOG_OUTPUT}### Fixed\n${FIXED}\n\n"; fi
-                if [ ! -z "$REMOVED" ]; then CHANGELOG_OUTPUT="${CHANGELOG_OUTPUT}### Removed\n${REMOVED}\n\n"; fi
-                if [ ! -z "$SECURITY" ]; then CHANGELOG_OUTPUT="${CHANGELOG_OUTPUT}### Security\n${SECURITY}\n\n"; fi
-                
+                CHANGELOG_OUTPUT="$NEW_SECTION"
                 echo "changelog<<EOF" >> $GITHUB_OUTPUT
                 echo -e "$CHANGELOG_OUTPUT" >> $GITHUB_OUTPUT
                 echo "EOF" >> $GITHUB_OUTPUT
@@ -529,22 +533,28 @@ runs:
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                
-                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                
-                  # Update version
-                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                
-                  # Update download URL (robust to attributes)
-                  sed -i -E "s|<downloadurl[^>]*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-                
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
-                else
-                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
-                fi
+                VERSION="${{ steps.set_version.outputs.version }}"
+                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                cat > "$UPDATES_XML" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+  <update>
+    <name>${EXTENSION_NAME}</name>
+    <description>Update for ${EXTENSION_NAME}</description>
+    <element>${EXTENSION_NAME}</element>
+    <type>module</type>
+    <version>${VERSION}</version>
+    <infourl title="GitHub Repository">https://github.com/${{ github.repository }}</infourl>
+    <downloads>
+      <downloadurl type="full" format="zip">${DOWNLOAD_URL}</downloadurl>
+    </downloads>
+    <targetplatform name="joomla" version="5.*" />
+    <php_minimum>8.1</php_minimum>
+  </update>
+</updates>
+EOF
+                echo "Replaced $UPDATES_XML with new version and download URL"
+                cat "$UPDATES_XML"
 
         -   name: Upload to GitHub Artifacts
             if: inputs.upload-artifact == 'true'
