@@ -395,7 +395,7 @@ runs:
                   fi
                 done <<< "$COMMITS"
                 
-                # Create changelog file
+                # Always create changelog file, even if empty
                 echo "# Changelog" > ${{ inputs.changelog-file }}
                 echo "" >> ${{ inputs.changelog-file }}
                 echo "All notable changes to this project will be documented in this file." >> ${{ inputs.changelog-file }}
@@ -523,11 +523,12 @@ runs:
             shell: bash
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                # Support both updates.xml and update.xml
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
                 DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                
+
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
                 
