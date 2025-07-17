@@ -395,7 +395,7 @@ runs:
                   fi
                 done <<< "$COMMITS"
                 
-                # Create changelog file
+                # Always create changelog file, even if empty
                 echo "# Changelog" > ${{ inputs.changelog-file }}
                 echo "" >> ${{ inputs.changelog-file }}
                 echo "All notable changes to this project will be documented in this file." >> ${{ inputs.changelog-file }}
@@ -523,22 +523,24 @@ runs:
             shell: bash
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                # Support both updates.xml and update.xml
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                
+                elif [ -f "update.xml" ]; then
+                  UPDATES_XML="update.xml"
+                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
+                fi
+                if [ -f "$UPDATES_XML" ]; then
                   DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                
                   # Update download URL
                   sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-                
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
                 else
-                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
+                  echo "::warning::No update server XML file (updates.xml or update.xml) found in repository"
                 fi
 
         -   name: Upload to GitHub Artifacts
