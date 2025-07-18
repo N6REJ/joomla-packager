@@ -171,17 +171,3 @@ jobs:
 > 
 > **Authentication:**
 > You must create a Personal Access Token (PAT) with appropriate permissions (e.g. `repo`, `workflow`) and add it to your repository secrets as `GH_PAT`. The default `GITHUB_TOKEN` does not have sufficient permissions for some release and artifact operations.
-
-## 📁 Repository Structure
-
-```
-joomla-packager/
-├── .github/
-│   ├── actions/
-│   │   └── joomla-packager/
-│   │       ├── action.yml          # The composite action
-│   │       └── README.md           # Action documentation
-│   └── workflows/
-│       └── example-usage.yml       # Example workflow
-└── README.md                       # This file
-```
