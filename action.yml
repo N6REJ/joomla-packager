@@ -443,6 +443,7 @@ runs:
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
+                  --exclude='.gitignore'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
