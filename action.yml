@@ -448,6 +448,7 @@ runs:
                 --exclude='node_modules/'
                 --exclude='.packagerignore'
                 --exclude='build/'
+                --exclude='package/'
                 --exclude='.gitignore'
                 --exclude='*.bak'
                 --exclude='*.zip'
