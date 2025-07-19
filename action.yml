@@ -423,3 +423,57 @@ runs:
                 echo "changelog<<EOF" >> $GITHUB_OUTPUT
                 echo -e "$CHANGELOG_OUTPUT" >> $GITHUB_OUTPUT
                 echo "EOF" >> $GITHUB_OUTPUT
+
+        - name: Create package
+          id: create_package
+          shell: bash
+          run: |
+              EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+              EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+              VERSION="${{ steps.set_version.outputs.version }}"
+              
+              if [ -n "$RUNNER_TEMP" ]; then
+                OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
+              else
+                OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
+              fi
+              rm -rf "$OUTER_BUILD_DIR"
+              mkdir -p "$OUTER_BUILD_DIR"
+              
+              EXCLUDES=(
+                --exclude='.git/'
+                --exclude='.github/'
+                --exclude='.DS_Store'
+                --exclude='Thumbs.db'
+                --exclude='node_modules/'
+                --exclude='.packagerignore'
+                --exclude='build/'
+                --exclude='.gitignore'
+                --exclude='*.bak'
+                --exclude='*.zip'
+              )
+              if [ -f .packagerignore ]; then
+                while IFS= read -r line; do
+                  [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+                  EXCLUDES+=(--exclude="$line")
+                done < .packagerignore
+              fi
+              
+              rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
+              
+              echo "External build/package directory contents:"
+              ls -la "$OUTER_BUILD_DIR"
+              
+              cd "$OUTER_BUILD_DIR"
+              zip -r "${EXTENSION_NAME}_${VERSION}.zip" .
+              cd -
+              
+              if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                if command -v tree &> /dev/null; then
+                  tree "$OUTER_BUILD_DIR" > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                else
+                  find "$OUTER_BUILD_DIR" -type f | sort > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                fi
+              fi
+              
+              echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
