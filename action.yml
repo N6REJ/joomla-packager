@@ -439,58 +439,18 @@ runs:
                 else
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
-                PKGDIR_NAME="${EXTENSION_NAME}"
-                rm -rf "$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
-                mkdir -p "$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
-                PKGDIR="$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
+                rm -rf "$OUTER_BUILD_DIR"
+                mkdir -p "$OUTER_BUILD_DIR"
 
-                # Prepare rsync exclude patterns (do not reference .gitignore at all)
-                EXCLUDES=(
-                  --exclude='.git/'
-                  --exclude='.github/'
-                  --exclude='.DS_Store'
-                  --exclude='Thumbs.db'
-                  --exclude='node_modules/'
-                  --exclude='.packagerignore'
-                  --exclude='build/'
-                  --exclude='.gitignore'
-                  --exclude='*.bak'
-                  --exclude='*.zip'
-                )
-                # If .packagerignore exists, add its patterns
-                if [ -f .packagerignore ]; then
-                  while IFS= read -r line; do
-                    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-                    EXCLUDES+=(--exclude="$line")
-                  done < .packagerignore
-                fi
-
-                # Use rsync to copy everything except excluded files/folders to external package dir
-                rsync -a . "$PKGDIR/" "${EXCLUDES[@]}"
-
-                # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$PKGDIR/" 2>/dev/null || true
-                cp "$EXTENSION_XML" "$PKGDIR/"
-                if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} "$PKGDIR/"; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} "$PKGDIR/"; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} "$PKGDIR/"; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} "$PKGDIR/"; fi
+                # Copy the extension folder to temp
+                cp -r "${EXTENSION_NAME}" "$OUTER_BUILD_DIR/"
 
                 echo "External build/package directory contents:"
-                ls -la "$PKGDIR/"
+                ls -la "$OUTER_BUILD_DIR/${EXTENSION_NAME}"
 
-                # Generate directory tree if requested
-                if [ -n "${{ inputs.dir-tree-file }}" ]; then
-                  if command -v tree &> /dev/null; then
-                    tree "$PKGDIR" > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  else
-                    find "$PKGDIR" -type f | sort > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  fi
-                fi
-
-                # Create ZIP archive from inside the package/mod_julianclock directory so the zip root is correct
-                cd "$PKGDIR"
-                zip -r "$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" .
+                # Create ZIP archive so the zip contains only the extension folder at the root
+                cd "$OUTER_BUILD_DIR"
+                zip -r "${EXTENSION_NAME}_${VERSION}.zip" "${EXTENSION_NAME}"
                 cd -
 
                 # Output package path (.zip) in the external build dir
