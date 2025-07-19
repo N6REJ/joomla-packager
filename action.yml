@@ -336,13 +336,20 @@ runs:
 
                 echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
 
-        -   name: Upload to GitHub Artifacts
-            if: inputs.upload-artifact == 'true'
-            uses: actions/upload-artifact@v4
-            with:
-                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: |
-                  ${{ steps.create_package.outputs.package_path }}
-                  ${{ steps.create_package.outputs.dir_tree_path }}
-                retention-days: 90
-                if-no-files-found: warn
+        - name: Upload extension package zip
+          if: inputs.upload-artifact == 'true'
+          uses: actions/upload-artifact@v4
+          with:
+              name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+              path: ${{ steps.create_package.outputs.package_path }}
+              retention-days: 90
+              if-no-files-found: warn
+
+        - name: Upload directory tree file
+          if: inputs.upload-artifact == 'true' && steps.create_package.outputs.dir_tree_path != ''
+          uses: actions/upload-artifact@v4
+          with:
+              name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}_dir_tree
+              path: ${{ steps.create_package.outputs.dir_tree_path }}
+              retention-days: 90
+              if-no-files-found: warn
