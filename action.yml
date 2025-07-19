@@ -493,6 +493,10 @@ runs:
                   echo "::warning::xmllint not found, skipping manifest XML validation."
                 fi
 
+                # Remove any .zip and .bak files from the package directory before copying
+                find "$PACKAGE_DIR" -name '*.zip' -delete
+                find "$PACKAGE_DIR" -name '*.bak' -delete
+
                 # Use rsync to copy everything except excluded files/folders directly into package/
                 rsync -a ./ "$PACKAGE_DIR/" "${EXCLUDES[@]}"
 
@@ -507,13 +511,13 @@ runs:
                 echo "Package contents:"
                 ls -la "$PACKAGE_DIR/"
 
-                # Remove any .zip and .bak files from the package directory before packaging
+                # Remove any .zip and .bak files from the package directory before packaging (again)
                 find "$PACKAGE_DIR" -name '*.zip' -delete
                 find "$PACKAGE_DIR" -name '*.bak' -delete
 
                 # Create ZIP archive at the root, zipping only the contents of package/ (no subfolder, no ZIPs)
                 cd "$PACKAGE_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip . -x '*.zip'
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
 
