@@ -483,7 +483,7 @@ runs:
                 
                 # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
                 cd "$BUILD_DIR/$EXTENSION_NAME"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .[!.]* *
                 cd -
                 
                 # Output package path (.zip)
