@@ -500,8 +500,8 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
-                    ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
-                    ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    ${{ github.workspace }}/${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                    ${{ github.workspace }}/${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
                 body: |
@@ -546,7 +546,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                path: ${{ github.workspace }}/${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                 retention-days: 90
                 if-no-files-found: warn
 
