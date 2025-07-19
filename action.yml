@@ -289,7 +289,7 @@ runs:
                 else
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
-                FILES_DIR=\"$OUTER_BUILD_DIR/files_to_zip\"
+                FILES_DIR=$OUTER_BUILD_DIR/files_to_zip
                 rm -rf \"$OUTER_BUILD_DIR\"
                 mkdir -p \"$FILES_DIR\"
                 
@@ -313,7 +313,7 @@ runs:
                   done < .packagerignore
                 fi
                 
-                rsync -a ./ \"$FILES_DIR/\" \"${EXCLUDES[@]}\"
+                rsync -a ./ "$FILES_DIR/" "${EXCLUDES[@]}"
                 
                 # Generate directory tree from FILES_DIR
                 if [ -n \"${{ inputs.dir-tree-file }}\" ]; then
