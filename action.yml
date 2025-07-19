@@ -508,10 +508,10 @@ runs:
                   fi
                 
                   if command -v tree &> /dev/null; then
-                    tree "$BUILD_DIR" > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    tree "$BUILD_DIR" > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
                   else
                     # Fallback to find if tree is not available
-                    find "$BUILD_DIR" -type f | sort > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    find "$BUILD_DIR" -type f | sort > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
                   fi
                 fi
                 
@@ -533,7 +533,7 @@ runs:
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
                     ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
-                    ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    build/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
                 body: |
