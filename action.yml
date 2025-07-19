@@ -448,7 +448,12 @@ runs:
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
+                  --exclude='.gitignore'
+                  --exclude='*.bak'
                   --exclude='*.zip'
+                  --exclude='CHANGELOG.md'
+                  --exclude='README.md'
+                  --exclude='readme.md'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
@@ -486,7 +491,7 @@ runs:
                 
                 # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
                 cd "$PKGDIR"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" ./*
                 cd -
                 
                 # Output package path (.zip)
