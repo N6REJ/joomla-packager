@@ -495,3 +495,66 @@ runs:
 
                 # Output package path (.zip) in the external build dir
                 echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
+
+        -   name: Create GitHub Release
+            if: inputs.create-release == 'true'
+            id: create_release
+            uses: softprops/action-gh-release@v1
+            with:
+                tag_name: ${{ steps.set_version.outputs.version }}
+                name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
+                files: |
+                    ${{ steps.create_package.outputs.package_path }}
+                    ${{ github.workspace }}/${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                draft: false
+                prerelease: false
+                body: |
+                    ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
+                    
+                    ### Download Options:
+                    - Download directly from this release page
+                    - Access the artifact from the Actions tab of this workflow run
+                    
+                    ## Changelog
+                    ${{ steps.changelog.outputs.changelog }}
+                    
+                    [View full changelog](https://github.com/${{ github.repository }}/blob/main/${{ inputs.changelog-file }})
+            env:
+                GITHUB_TOKEN: ${{ inputs.github-token }}
+
+        -   name: Update Joomla update server XML
+            if: inputs.update-joomla-server == 'true'
+            shell: bash
+            run: |
+                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                UPDATES_XML="${{ inputs.updates-xml-file }}"
+                if [ -f "$UPDATES_XML" ]; then
+                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
+                
+                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                
+                  # Update version
+                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
+                
+                  # Update download URL
+                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                
+                  echo "Updated $UPDATES_XML file with new version and download URL"
+                  cat "$UPDATES_XML"
+                else
+                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
+                fi
+
+        -   name: Upload to GitHub Artifacts
+            if: inputs.upload-artifact == 'true'
+            uses: actions/upload-artifact@v4
+            with:
+                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
+                path: ${{ steps.create_package.outputs.package_path }}
+                retention-days: 90
+                if-no-files-found: warn
+
+        -   name: Cleanup backup files
+            shell: bash
+            run: |
+                rm -f ${{ steps.extension_details.outputs.extension_xml }}.bak ${{ inputs.updates-xml-file }}.bak ${{ inputs.changelog-file }}.bak || true
