@@ -497,30 +497,31 @@ runs:
                 find "$PACKAGE_DIR" -name '*.zip' -delete
                 find "$PACKAGE_DIR" -name '*.bak' -delete
 
-                # Use rsync to copy everything except excluded files/folders directly into package/
-                rsync -a ./ "$PACKAGE_DIR/" "${EXCLUDES[@]}"
+                # Use a subdirectory for the extension inside package/
+                EXT_SUBDIR="$PACKAGE_DIR/$EXTENSION_NAME"
+                mkdir -p "$EXT_SUBDIR"
+
+                # Use rsync to copy everything except excluded files/folders into the extension subdirectory
+                rsync -a ./ "$EXT_SUBDIR/" "${EXCLUDES[@]}"
 
                 # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$PACKAGE_DIR/" 2>/dev/null || true
-                cp "$EXTENSION_XML" "$PACKAGE_DIR/"
-                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$PACKAGE_DIR/"; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$PACKAGE_DIR/"; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$PACKAGE_DIR/"; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$PACKAGE_DIR/"; fi
+                cp ${EXTENSION_NAME}.php "$EXT_SUBDIR/" 2>/dev/null || true
+                cp "$EXTENSION_XML" "$EXT_SUBDIR/"
+                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$EXT_SUBDIR/"; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$EXT_SUBDIR/"; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$EXT_SUBDIR/"; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$EXT_SUBDIR/"; fi
 
                 echo "Package contents:"
-                ls -la "$PACKAGE_DIR/"
+                ls -la "$EXT_SUBDIR/"
 
-                # Remove any .zip and .bak files from the package directory before packaging (again)
-                find "$PACKAGE_DIR" -name '*.zip' -delete
-                find "$PACKAGE_DIR" -name '*.bak' -delete
+                # Remove any .zip and .bak files from the extension subdirectory before packaging
+                find "$EXT_SUBDIR" -name '*.zip' -delete
+                find "$EXT_SUBDIR" -name '*.bak' -delete
 
-                echo "DEBUG: Listing package directory before zipping:"
-                ls -la "$PACKAGE_DIR/"
-
-                # Create ZIP archive at the root, zipping only the contents of package/ (no subfolder, no ZIPs)
+                # Create ZIP archive at the root, zipping only the extension subdirectory (Joomla standard)
                 cd "$PACKAGE_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip "$EXTENSION_NAME"
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
 
