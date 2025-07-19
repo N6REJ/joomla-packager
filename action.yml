@@ -481,13 +481,13 @@ runs:
                   fi
                 fi
                 
-                # Create ZIP archive in build/ with root files (no build/ in zip)
+                # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
                 cd "$BUILD_DIR/$EXTENSION_NAME"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" * .[^.]*
+                zip -r "../../${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
                 
                 # Output package path (.zip)
-                echo "package_path=$BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
+                echo "package_path=$BUILD_DIR/../${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
 
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
