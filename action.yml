@@ -435,9 +435,10 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 
-                # Clean and create build directory (always use root-level 'build')
+                # Clean up any old ZIPs and build directory at the start
+                rm -f ./*.zip
+                rm -rf build
                 BUILD_DIR="build"
-                rm -rf "$BUILD_DIR"
                 mkdir -p "$BUILD_DIR"
                 
                 # Prepare rsync exclude patterns
@@ -464,6 +465,7 @@ runs:
                   --exclude='README.txt'
                   --exclude='readme.md'
                   --exclude='readme.txt'
+                  --exclude='*.zip'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
@@ -525,9 +527,9 @@ runs:
                 find "$BUILD_DIR" -name '*.zip' -delete
                 find "$BUILD_DIR" -name '*.bak' -delete
 
-                # Create ZIP archive at the root, not inside build/
+                # Create ZIP archive at the root, zipping only the contents of build/ (no nesting)
                 cd "$BUILD_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip ./*
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 
