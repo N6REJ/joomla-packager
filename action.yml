@@ -432,14 +432,18 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 VERSION="${{ steps.set_version.outputs.version }}"
-                
-                # Always use build/ as the temp/output directory
-                BUILD_DIR="build"
-                
-                # Clean and create build directory
-                rm -rf "$BUILD_DIR"
-                mkdir -p "$BUILD_DIR"
-                
+
+                # Use a temp directory outside the repo for build and zip
+                if [ -n "$RUNNER_TEMP" ]; then
+                  OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
+                else
+                  OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
+                fi
+                PKGDIR_NAME="${EXTENSION_NAME}_${VERSION}"
+                rm -rf "$OUTER_BUILD_DIR/$PKGDIR_NAME"
+                mkdir -p "$OUTER_BUILD_DIR/$PKGDIR_NAME"
+                PKGDIR="$OUTER_BUILD_DIR/$PKGDIR_NAME"
+
                 # Prepare rsync exclude patterns (do not reference .gitignore at all)
                 EXCLUDES=(
                   --exclude='.git/'
@@ -460,14 +464,10 @@ runs:
                     EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
                 fi
-                
-                # Clean and create build/package
-                PKGDIR="$BUILD_DIR/package"
-                rm -rf "$PKGDIR"
-                mkdir -p "$PKGDIR"
-                # Use rsync to copy everything except excluded files/folders to build/package dir
+
+                # Use rsync to copy everything except excluded files/folders to external package dir
                 rsync -a . "$PKGDIR/" "${EXCLUDES[@]}"
-                
+
                 # Ensure main files are present (overwrite if needed)
                 cp ${EXTENSION_NAME}.php "$PKGDIR/" 2>/dev/null || true
                 cp "$EXTENSION_XML" "$PKGDIR/"
@@ -475,86 +475,23 @@ runs:
                 if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} "$PKGDIR/"; fi
                 if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} "$PKGDIR/"; fi
                 if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} "$PKGDIR/"; fi
-                
-                echo "Build/package directory contents:"
+
+                echo "External build/package directory contents:"
                 ls -la "$PKGDIR/"
-                
+
                 # Generate directory tree if requested
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
                   if command -v tree &> /dev/null; then
-                    tree "$PKGDIR" > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
+                    tree "$PKGDIR" > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
                   else
-                    find "$PKGDIR" -type f | sort > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
+                    find "$PKGDIR" -type f | sort > "$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
                   fi
                 fi
-                
-                # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
-                cd "$PKGDIR"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" ./*
+
+                # Create ZIP archive in the external build dir (so the zip contains the top-level folder)
+                cd "$OUTER_BUILD_DIR"
+                zip -r "${EXTENSION_NAME}_${VERSION}.zip" "$PKGDIR_NAME"
                 cd -
-                
-                # Output package path (.zip)
-                echo "package_path=$BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
 
-        -   name: Create GitHub Release
-            if: inputs.create-release == 'true'
-            id: create_release
-            uses: softprops/action-gh-release@v1
-            with:
-                tag_name: ${{ steps.set_version.outputs.version }}
-                name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
-                files: |
-                    ${{ github.workspace }}/${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
-                    ${{ github.workspace }}/${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
-                draft: false
-                prerelease: false
-                body: |
-                    ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
-                    
-                    ### Download Options:
-                    - Download directly from this release page
-                    - Access the artifact from the Actions tab of this workflow run
-                    
-                    ## Changelog
-                    ${{ steps.changelog.outputs.changelog }}
-                    
-                    [View full changelog](https://github.com/${{ github.repository }}/blob/main/${{ inputs.changelog-file }})
-            env:
-                GITHUB_TOKEN: ${{ inputs.github-token }}
-
-        -   name: Update Joomla update server XML
-            if: inputs.update-joomla-server == 'true'
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                UPDATES_XML="${{ inputs.updates-xml-file }}"
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                
-                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                
-                  # Update version
-                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                
-                  # Update download URL
-                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-                
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
-                else
-                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
-                fi
-
-        -   name: Upload to GitHub Artifacts
-            if: inputs.upload-artifact == 'true'
-            uses: actions/upload-artifact@v4
-            with:
-                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ github.workspace }}/${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
-                retention-days: 90
-                if-no-files-found: warn
-
-        -   name: Cleanup backup files
-            shell: bash
-            run: |
-                rm -f ${{ steps.extension_details.outputs.extension_xml }}.bak ${{ inputs.updates-xml-file }}.bak ${{ inputs.changelog-file }}.bak || true
+                # Output package path (.zip) in the external build dir
+                echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
