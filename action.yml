@@ -483,11 +483,11 @@ runs:
                 
                 # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
                 cd "$BUILD_DIR/$EXTENSION_NAME"
-                zip -r "../../${EXTENSION_NAME}_${VERSION}.zip" .
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
                 
                 # Output package path (.zip)
-                echo "package_path=$BUILD_DIR/../${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
+                echo "package_path=$BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
 
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
@@ -497,7 +497,7 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
-                    ../${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                    ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                     ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
@@ -543,7 +543,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ../${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                path: ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                 retention-days: 90
                 if-no-files-found: warn
 
