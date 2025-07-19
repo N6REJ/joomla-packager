@@ -2,10 +2,6 @@ name: 'Joomla Extension Packager'
 description: 'A composite action to package and release Joomla extensions (modules, plugins, components)'
 author: 'N6REJ'
 
-branding:
-    icon: 'package'
-    color: 'blue'
-
 inputs:
     # Extension identification
     extension-name:
