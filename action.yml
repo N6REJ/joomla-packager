@@ -519,10 +519,9 @@ runs:
                 ls -la "$PACKAGE_DIR/"
 
                 # Create ZIP archive at the root, zipping only the contents of package/ (no subfolder, no ZIPs)
-                # Use a temp directory for the output ZIP to guarantee it is not included
-                TMP_ZIP_PATH="/tmp/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                zip -r "$TMP_ZIP_PATH" "$PACKAGE_DIR"/*
-                mv "$TMP_ZIP_PATH" "${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                cd "$PACKAGE_DIR"
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
 
                 echo "DEBUG: Listing root after zipping:"
