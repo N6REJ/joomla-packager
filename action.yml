@@ -432,8 +432,10 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 
-                # Create package directory
-                mkdir -p ${{ inputs.package-dir }}/$EXTENSION_NAME
+                # Create build directory (always use root-level 'build')
+                BUILD_DIR="build"
+                rm -rf "$BUILD_DIR"
+                mkdir -p "$BUILD_DIR"
                 
                 # Prepare rsync exclude patterns
                 EXCLUDES=(
@@ -454,18 +456,18 @@ runs:
                 fi
                 
                 # Use rsync to copy everything except excluded files/folders
-                rsync -a . ${{ inputs.package-dir }}/$EXTENSION_NAME/ "${EXCLUDES[@]}"
+                rsync -a . "$BUILD_DIR"/ "${EXCLUDES[@]}"
                 
                 # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php ${{ inputs.package-dir }}/$EXTENSION_NAME/ 2>/dev/null || true
-                cp $EXTENSION_XML ${{ inputs.package-dir }}/$EXTENSION_NAME/
-                if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
+                cp ${EXTENSION_NAME}.php "$BUILD_DIR"/ 2>/dev/null || true
+                cp "$EXTENSION_XML" "$BUILD_DIR"/
+                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$BUILD_DIR"/; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$BUILD_DIR"/; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$BUILD_DIR"/; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$BUILD_DIR"/; fi
                 
                 echo "Package contents:"
-                ls -la ${{ inputs.package-dir }}/$EXTENSION_NAME/
+                ls -la "$BUILD_DIR"/
                 
                 # Generate directory tree if requested
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
@@ -477,16 +479,17 @@ runs:
                   fi
                 
                   if command -v tree &> /dev/null; then
-                    tree ${{ inputs.package-dir }}/$EXTENSION_NAME > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    tree "$BUILD_DIR" > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
                   else
                     # Fallback to find if tree is not available
-                    find ${{ inputs.package-dir }}/$EXTENSION_NAME -type f | sort > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                    find "$BUILD_DIR" -type f | sort > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
                   fi
                 fi
                 
-                # Create ZIP archive
-                cd ${{ inputs.package-dir }}
-                zip -r ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip $EXTENSION_NAME
+                # Create ZIP archive with files at root
+                cd "$BUILD_DIR"
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 
                 # Output package path
