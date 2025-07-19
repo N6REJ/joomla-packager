@@ -439,10 +439,10 @@ runs:
                 else
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
-                PKGDIR_NAME="${EXTENSION_NAME}_${VERSION}"
-                rm -rf "$OUTER_BUILD_DIR/$PKGDIR_NAME"
-                mkdir -p "$OUTER_BUILD_DIR/$PKGDIR_NAME"
-                PKGDIR="$OUTER_BUILD_DIR/$PKGDIR_NAME"
+                PKGDIR_NAME="${EXTENSION_NAME}"
+                rm -rf "$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
+                mkdir -p "$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
+                PKGDIR="$OUTER_BUILD_DIR/package/$PKGDIR_NAME"
 
                 # Prepare rsync exclude patterns (do not reference .gitignore at all)
                 EXCLUDES=(
@@ -488,9 +488,9 @@ runs:
                   fi
                 fi
 
-                # Create ZIP archive in the external build dir (so the zip contains the top-level folder)
-                cd "$OUTER_BUILD_DIR"
-                zip -r "${EXTENSION_NAME}_${VERSION}.zip" "$PKGDIR_NAME"
+                # Create ZIP archive from inside the package/mod_julianclock directory so the zip root is correct
+                cd "$PKGDIR"
+                zip -r "$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
 
                 # Output package path (.zip) in the external build dir
