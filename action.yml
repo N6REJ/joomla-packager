@@ -320,7 +320,7 @@ runs:
 
                 # Generate directory tree from package_root
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
-                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}_dir_tree.txt"
                   if command -v tree &> /dev/null; then
                     tree "$OUTER_BUILD_DIR/package_root" > "$DIR_TREE_PATH"
                   else
@@ -349,31 +349,7 @@ runs:
             if: inputs.upload-artifact == 'true' && steps.create_package.outputs.dir_tree_path != ''
             uses: actions/upload-artifact@v4
             with:
-                name: directory_tree.txt
+                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}_dir_tree.txt
                 path: ${{ steps.create_package.outputs.dir_tree_path }}
                 retention-days: 90
                 if-no-files-found: warn
-
-        -   name: Update Joomla update server XML
-            if: inputs.update-joomla-server == 'true'
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                VERSION="${{ steps.set_version.outputs.version }}"
-                UPDATES_XML="${{ inputs.updates-xml-file }}"
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-
-                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
-
-                  # Update version
-                  sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
-
-                  # Update download URL
-                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
-                else
-                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
-                fi
