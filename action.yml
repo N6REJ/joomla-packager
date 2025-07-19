@@ -17,7 +17,7 @@ inputs:
         required: false
         default: ''
     extension-type:
-        description: 'Type of extension (module, plugin, component, package). If not specified, derived from repository name prefix.'
+        description: 'Type of extension (module, plugin, component). If not specified, derived from repository name prefix.'
         required: false
         default: ''
 
@@ -176,9 +176,6 @@ runs:
                         ;;
                       component)
                         EXTENSION_NAME="com_${EXTENSION_NAME}"
-                        ;;
-                      package)
-                        EXTENSION_NAME="pkg_${EXTENSION_NAME}"
                         ;;
                     esac
                   fi
@@ -435,38 +432,17 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 
-                # Clean up any old ZIPs and package directory at the start
-                rm -f ./*.zip
-                rm -rf package
-                PACKAGE_DIR="package"
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                mkdir -p "$PACKAGE_DIR"
-
+                # Create package directory
+                mkdir -p ${{ inputs.package-dir }}/$EXTENSION_NAME
+                
                 # Prepare rsync exclude patterns
                 EXCLUDES=(
                   --exclude='.git/'
                   --exclude='.github/'
-                  --exclude='.gitlab/'
-                  --exclude='.vscode/'
                   --exclude='.DS_Store'
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
-                  --exclude='.gitignore'
-                  --exclude='.editorconfig'
-                  --exclude='.gitattributes'
-                  --exclude='.env'
-                  --exclude='.env.example'
-                  --exclude='test/'
-                  --exclude='tests/'
-                  --exclude='.phpunit.result.cache'
-                  --exclude='phpunit.xml'
-                  --exclude='phpunit.xml.dist'
-                  --exclude='README.md'
-                  --exclude='README.txt'
-                  --exclude='readme.md'
-                  --exclude='readme.txt'
-                  --exclude='*.zip'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
@@ -476,60 +452,45 @@ runs:
                     EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
                 fi
-
-                # Ensure xmllint is installed for manifest validation
-                if ! command -v xmllint &> /dev/null; then
-                  if command -v apt-get &> /dev/null; then
-                    sudo apt-get update && sudo apt-get install -y libxml2-utils
-                  fi
-                fi
-                # Validate manifest XML
-                if command -v xmllint &> /dev/null; then
-                  if ! xmllint --noout "$EXTENSION_XML"; then
-                    echo "::error::Manifest XML validation failed for $EXTENSION_XML"
-                    exit 1
-                  fi
-                else
-                  echo "::warning::xmllint not found, skipping manifest XML validation."
-                fi
-
-                # Remove any .zip and .bak files from the package directory before copying
-                find "$PACKAGE_DIR" -name '*.zip' -delete
-                find "$PACKAGE_DIR" -name '*.bak' -delete
-
-                # Use a subdirectory for the extension inside package/
-                EXT_SUBDIR="$PACKAGE_DIR/$EXTENSION_NAME"
-                mkdir -p "$EXT_SUBDIR"
-
-                # Use rsync to copy everything except excluded files/folders into the extension subdirectory
-                rsync -a ./ "$EXT_SUBDIR/" "${EXCLUDES[@]}"
-
+                
+                # Use rsync to copy everything except excluded files/folders
+                rsync -a . ${{ inputs.package-dir }}/$EXTENSION_NAME/ "${EXCLUDES[@]}"
+                
                 # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$EXT_SUBDIR/" 2>/dev/null || true
-                cp "$EXTENSION_XML" "$EXT_SUBDIR/"
-                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$EXT_SUBDIR/"; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$EXT_SUBDIR/"; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$EXT_SUBDIR/"; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$EXT_SUBDIR/"; fi
-
+                cp ${EXTENSION_NAME}.php ${{ inputs.package-dir }}/$EXTENSION_NAME/ 2>/dev/null || true
+                cp $EXTENSION_XML ${{ inputs.package-dir }}/$EXTENSION_NAME/
+                if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} ${{ inputs.package-dir }}/$EXTENSION_NAME/; fi
+                
                 echo "Package contents:"
-                ls -la "$EXT_SUBDIR/"
-
-                # Remove any .zip and .bak files from the extension subdirectory before packaging
-                find "$EXT_SUBDIR" -name '*.zip' -delete
-                find "$EXT_SUBDIR" -name '*.bak' -delete
-
-                # Create ZIP archive at the root, zipping only the extension subdirectory (Joomla standard)
-                cd "$PACKAGE_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip "$EXTENSION_NAME"
-                cd ..
+                ls -la ${{ inputs.package-dir }}/$EXTENSION_NAME/
+                
+                # Generate directory tree if requested
+                if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                  # Check if tree is available, if not try to install it
+                  if ! command -v tree &> /dev/null; then
+                    if command -v apt-get &> /dev/null; then
+                      sudo apt-get update && sudo apt-get install -y tree
+                    fi
+                  fi
+                
+                  if command -v tree &> /dev/null; then
+                    tree ${{ inputs.package-dir }}/$EXTENSION_NAME > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                  else
+                    # Fallback to find if tree is not available
+                    find ${{ inputs.package-dir }}/$EXTENSION_NAME -type f | sort > ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
+                  fi
+                fi
+                
+                # Create ZIP archive
+                cd ${{ inputs.package-dir }}
+                zip -r ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip $EXTENSION_NAME
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-
-                echo "DEBUG: Listing root after zipping:"
-                ls -la .
-
+                
                 # Output package path
-                echo "package_path=${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" >> $GITHUB_OUTPUT
+                echo "package_path=${{ inputs.package-dir }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" >> $GITHUB_OUTPUT
 
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
@@ -539,8 +500,8 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
-                    ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
-                    build/${{ inputs.dir-tree-file }}
+                    ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                    ${{ inputs.package-dir }}/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
                 body: |
@@ -563,36 +524,21 @@ runs:
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
-                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                # If updates.xml does not exist, create a minimal valid structure
-                if [ ! -f "$UPDATES_XML" ]; then
-                  echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
-                  echo '<updates>' >> "$UPDATES_XML"
-                  echo '  <update>' >> "$UPDATES_XML"
-                  echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
-                  echo '    <description />' >> "$UPDATES_XML"
-                  echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
-                  echo '    <type />' >> "$UPDATES_XML"
-                  echo '    <version>${{ steps.set_version.outputs.version }}</version>' >> "$UPDATES_XML"
-                  echo '    <infourl />' >> "$UPDATES_XML"
-                  echo '    <downloads>' >> "$UPDATES_XML"
-                  echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
-                  echo '    </downloads>' >> "$UPDATES_XML"
-                  echo '  </update>' >> "$UPDATES_XML"
-                  echo '</updates>' >> "$UPDATES_XML"
-                fi
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
+                
+                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                  # Remove all existing <downloadurl ...>...</downloadurl> lines
-                  sed -i '/<downloadurl.*>.*<\/downloadurl>/d' "$UPDATES_XML"
-                  # Add the new downloadurl line just before </downloads>
-                  sed -i "/<\/downloads>/i\      <downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>" "$UPDATES_XML"
+                
+                  # Update download URL
+                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
                 else
-                  echo "::warning::${{ inputs.updates-xml-file }} file could not be created."
+                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
                 fi
 
         -   name: Upload to GitHub Artifacts
@@ -600,7 +546,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                path: ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                 retention-days: 90
                 if-no-files-found: warn
 
@@ -608,4 +554,3 @@ runs:
             shell: bash
             run: |
                 rm -f ${{ steps.extension_details.outputs.extension_xml }}.bak ${{ inputs.updates-xml-file }}.bak ${{ inputs.changelog-file }}.bak || true
-                rm -rf build package *.zip || true
