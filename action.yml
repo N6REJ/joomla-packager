@@ -521,9 +521,13 @@ runs:
                   fi
                 fi
                 
-                # Create ZIP archive with files at root
+                # Remove any .zip and .bak files from the build directory before packaging
+                find "$BUILD_DIR" -name '*.zip' -delete
+                find "$BUILD_DIR" -name '*.bak' -delete
+
+                # Create ZIP archive with only root-level files and folders (no build/ nesting, no .bak/.zip)
                 cd "$BUILD_DIR"
-                zip -r ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                zip -r "${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" ./*
                 cd ..
                 echo "Created ZIP archive: build/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 
