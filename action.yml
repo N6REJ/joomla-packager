@@ -440,7 +440,7 @@ runs:
                 rm -rf package
                 PACKAGE_DIR="package"
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                mkdir -p "$PACKAGE_DIR/$EXTENSION_NAME"
+                mkdir -p "$PACKAGE_DIR"
 
                 # Prepare rsync exclude patterns
                 EXCLUDES=(
@@ -493,27 +493,27 @@ runs:
                   echo "::warning::xmllint not found, skipping manifest XML validation."
                 fi
 
-                # Use rsync to copy everything except excluded files/folders into the extension subdirectory
-                rsync -a ./ "$PACKAGE_DIR/$EXTENSION_NAME/" "${EXCLUDES[@]}"
+                # Use rsync to copy everything except excluded files/folders directly into package/
+                rsync -a ./ "$PACKAGE_DIR/" "${EXCLUDES[@]}"
 
                 # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$PACKAGE_DIR/$EXTENSION_NAME/" 2>/dev/null || true
-                cp "$EXTENSION_XML" "$PACKAGE_DIR/$EXTENSION_NAME/"
-                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
+                cp ${EXTENSION_NAME}.php "$PACKAGE_DIR/" 2>/dev/null || true
+                cp "$EXTENSION_XML" "$PACKAGE_DIR/"
+                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$PACKAGE_DIR/"; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$PACKAGE_DIR/"; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$PACKAGE_DIR/"; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$PACKAGE_DIR/"; fi
 
                 echo "Package contents:"
-                ls -la "$PACKAGE_DIR/$EXTENSION_NAME/"
+                ls -la "$PACKAGE_DIR/"
 
-                # Remove any .zip and .bak files from the extension subdirectory before packaging
-                find "$PACKAGE_DIR/$EXTENSION_NAME" -name '*.zip' -delete
-                find "$PACKAGE_DIR/$EXTENSION_NAME" -name '*.bak' -delete
+                # Remove any .zip and .bak files from the package directory before packaging
+                find "$PACKAGE_DIR" -name '*.zip' -delete
+                find "$PACKAGE_DIR" -name '*.bak' -delete
 
-                # Create ZIP archive at the root, zipping only the extension subdirectory (Joomla standard)
+                # Create ZIP archive at the root, zipping only the contents of package/ (no subfolder)
                 cd "$PACKAGE_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip "$EXTENSION_NAME"
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip ./*
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
 
