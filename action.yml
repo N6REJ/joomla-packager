@@ -493,7 +493,7 @@ runs:
                 fi
                 
                 # Use rsync to copy everything except excluded files/folders
-                rsync -a . "$BUILD_DIR"/ "${EXCLUDES[@]}"
+                rsync -a ./ "$BUILD_DIR"/ "${EXCLUDES[@]}"
                 
                 # Ensure main files are present (overwrite if needed)
                 cp ${EXTENSION_NAME}.php "$BUILD_DIR"/ 2>/dev/null || true
@@ -529,7 +529,7 @@ runs:
 
                 # Create ZIP archive at the root, zipping only the contents of build/ (no nesting)
                 cd "$BUILD_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip .
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip ./*
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 
