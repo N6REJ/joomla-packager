@@ -312,7 +312,7 @@ runs:
                   done < .packagerignore
                 fi
                 
-                rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
+                rsync -a ./ "$OUTER_BUILD_DIR" "${EXCLUDES[@]}"
                 
                 # Generate directory tree from OUTER_BUILD_DIR
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
