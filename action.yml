@@ -448,6 +448,7 @@ runs:
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
+                  --exclude='*.zip'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
@@ -480,9 +481,9 @@ runs:
                   fi
                 fi
                 
-                # Create ZIP archive in build/ with root files
+                # Create ZIP archive in build/ with root files (no build/ in zip)
                 cd "$BUILD_DIR/$EXTENSION_NAME"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" * .[^.]*
                 cd -
                 
                 # Output package path (.zip)
