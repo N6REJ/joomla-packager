@@ -17,7 +17,7 @@ inputs:
         required: false
         default: ''
     extension-type:
-        description: 'Type of extension (module, plugin, component). If not specified, derived from repository name prefix.'
+        description: 'Type of extension (module, plugin, component, package). If not specified, derived from repository name prefix.'
         required: false
         default: ''
 
@@ -176,6 +176,9 @@ runs:
                         ;;
                       component)
                         EXTENSION_NAME="com_${EXTENSION_NAME}"
+                        ;;
+                      package)
+                        EXTENSION_NAME="pkg_${EXTENSION_NAME}"
                         ;;
                     esac
                   fi
@@ -441,10 +444,26 @@ runs:
                 EXCLUDES=(
                   --exclude='.git/'
                   --exclude='.github/'
+                  --exclude='.gitlab/'
+                  --exclude='.vscode/'
                   --exclude='.DS_Store'
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
+                  --exclude='.gitignore'
+                  --exclude='.editorconfig'
+                  --exclude='.gitattributes'
+                  --exclude='.env'
+                  --exclude='.env.example'
+                  --exclude='test/'
+                  --exclude='tests/'
+                  --exclude='.phpunit.result.cache'
+                  --exclude='phpunit.xml'
+                  --exclude='phpunit.xml.dist'
+                  --exclude='README.md'
+                  --exclude='README.txt'
+                  --exclude='readme.md'
+                  --exclude='readme.txt'
                 )
                 # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
@@ -453,6 +472,16 @@ runs:
                     [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
                     EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
+                fi
+                
+                # (Optional) Validate manifest XML if xmllint is available
+                if command -v xmllint &> /dev/null; then
+                  if ! xmllint --noout "$EXTENSION_XML"; then
+                    echo "::error::Manifest XML validation failed for $EXTENSION_XML"
+                    exit 1
+                  fi
+                else
+                  echo "::warning::xmllint not found, skipping manifest XML validation."
                 fi
                 
                 # Use rsync to copy everything except excluded files/folders
@@ -570,3 +599,4 @@ runs:
             shell: bash
             run: |
                 rm -f ${{ steps.extension_details.outputs.extension_xml }}.bak ${{ inputs.updates-xml-file }}.bak ${{ inputs.changelog-file }}.bak || true
+                rm -rf build package *.zip || true

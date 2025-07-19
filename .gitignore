@@ -1,49 +1,9 @@
-# Package directories
-package/
-*/package/
-dist/
-
-# Backup files
-*.bak
-*~
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE files
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Test artifacts
-mock-*/
-test-extensions/test-module/package/
-
-# Temporary files
-*.tmp
-*.temp
-*.log
-
-# Archives
+/package/
+/build/
 *.zip
-*.tar.gz
-*.tar
-
-# Node modules (if using any JS tools)
-node_modules/
-
-# Composer vendor (if using PHP tools)
-vendor/
-
-# Environment files
-.env
-.env.local
-
-# Super-linter outputs
-super-linter-output
-super-linter.log
-
-# GitHub Actions leftovers
-github_conf
+/.idea/.gitignore
+/.idea/joomla-packager.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/php.xml
+/.idea/vcs.xml
