@@ -474,7 +474,13 @@ runs:
                   done < .packagerignore
                 fi
                 
-                # (Optional) Validate manifest XML if xmllint is available
+                # Ensure xmllint is installed for manifest validation
+                if ! command -v xmllint &> /dev/null; then
+                  if command -v apt-get &> /dev/null; then
+                    sudo apt-get update && sudo apt-get install -y libxml2-utils
+                  fi
+                fi
+                # Validate manifest XML
                 if command -v xmllint &> /dev/null; then
                   if ! xmllint --noout "$EXTENSION_XML"; then
                     echo "::error::Manifest XML validation failed for $EXTENSION_XML"
@@ -532,7 +538,7 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
-                    ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                    build/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                     build/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
@@ -591,7 +597,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ inputs.package-dir }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                path: build/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                 retention-days: 90
                 if-no-files-found: warn
 
