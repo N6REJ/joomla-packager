@@ -440,13 +440,11 @@ runs:
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
                 rm -rf "$OUTER_BUILD_DIR"
-                mkdir -p "$OUTER_BUILD_DIR"
-
-                # Create a temp directory named after the extension
-                PKGDIR="$OUTER_BUILD_DIR/${EXTENSION_NAME}"
+                PKGDIR_NAME="${EXTENSION_NAME}_${VERSION}"
+                PKGDIR="$OUTER_BUILD_DIR/$PKGDIR_NAME"
                 mkdir -p "$PKGDIR"
 
-                # Prepare rsync exclude patterns (do not reference .gitignore at all)
+                # Prepare rsync exclude patterns
                 EXCLUDES=(
                   --exclude='.git/'
                   --exclude='.github/'
@@ -459,7 +457,6 @@ runs:
                   --exclude='*.bak'
                   --exclude='*.zip'
                 )
-                # If .packagerignore exists, add its patterns
                 if [ -f .packagerignore ]; then
                   while IFS= read -r line; do
                     [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
@@ -467,15 +464,15 @@ runs:
                   done < .packagerignore
                 fi
 
-                # Copy all relevant files/folders from repo root into the temp extension directory
+                # Copy all relevant files/folders from repo root into the temp extension versioned directory
                 rsync -a ./ "$PKGDIR/" "${EXCLUDES[@]}"
 
                 echo "External build/package directory contents:"
                 ls -la "$PKGDIR"
 
-                # Create ZIP archive so the zip contains only the extension folder at the root
+                # Create ZIP archive from inside OUTER_BUILD_DIR so the zip contains only the versioned folder at the root
                 cd "$OUTER_BUILD_DIR"
-                zip -r "${EXTENSION_NAME}_${VERSION}.zip" "${EXTENSION_NAME}"
+                zip -r "${EXTENSION_NAME}_${VERSION}.zip" "$PKGDIR_NAME"
                 cd -
 
                 # Output package path (.zip) in the external build dir
