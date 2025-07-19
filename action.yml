@@ -458,32 +458,35 @@ runs:
                   done < .packagerignore
                 fi
                 
-                # Use rsync to copy everything except excluded files/folders to build dir
-                rsync -a . "$BUILD_DIR/$EXTENSION_NAME/" "${EXCLUDES[@]}"
+                # Use rsync to copy everything except excluded files/folders to build/package dir
+                PKGDIR="$BUILD_DIR/package"
+                rm -rf "$PKGDIR"
+                mkdir -p "$PKGDIR"
+                rsync -a . "$PKGDIR/" "${EXCLUDES[@]}"
                 
                 # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$BUILD_DIR/$EXTENSION_NAME/" 2>/dev/null || true
-                cp "$EXTENSION_XML" "$BUILD_DIR/$EXTENSION_NAME/"
-                if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} "$BUILD_DIR/$EXTENSION_NAME/"; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} "$BUILD_DIR/$EXTENSION_NAME/"; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} "$BUILD_DIR/$EXTENSION_NAME/"; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} "$BUILD_DIR/$EXTENSION_NAME/"; fi
+                cp ${EXTENSION_NAME}.php "$PKGDIR/" 2>/dev/null || true
+                cp "$EXTENSION_XML" "$PKGDIR/"
+                if [ -f "${{ inputs.helper-file }}" ]; then cp ${{ inputs.helper-file }} "$PKGDIR/"; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp ${{ inputs.license-file }} "$PKGDIR/"; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp ${{ inputs.favicon-file }} "$PKGDIR/"; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp ${{ inputs.changelog-file }} "$PKGDIR/"; fi
                 
-                echo "Build directory contents:"
-                ls -la "$BUILD_DIR/$EXTENSION_NAME/"
+                echo "Build/package directory contents:"
+                ls -la "$PKGDIR/"
                 
                 # Generate directory tree if requested
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
                   if command -v tree &> /dev/null; then
-                    tree "$BUILD_DIR/$EXTENSION_NAME" > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
+                    tree "$PKGDIR" > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
                   else
-                    find "$BUILD_DIR/$EXTENSION_NAME" -type f | sort > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
+                    find "$PKGDIR" -type f | sort > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
                   fi
                 fi
                 
                 # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
-                cd "$BUILD_DIR/$EXTENSION_NAME"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .[!.]* *
+                cd "$PKGDIR"
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
                 
                 # Output package path (.zip)
