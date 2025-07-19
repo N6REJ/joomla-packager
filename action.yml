@@ -290,8 +290,8 @@ runs:
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
                 FILES_DIR=$OUTER_BUILD_DIR/files_to_zip
-                rm -rf \"$OUTER_BUILD_DIR\"
-                mkdir -p \"$FILES_DIR\"
+                rm -rf "$OUTER_BUILD_DIR"
+                mkdir -p "$FILES_DIR"
                 
                 EXCLUDES=(
                   --exclude='.git/'
