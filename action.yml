@@ -289,7 +289,7 @@ runs:
                 else
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
-                FILES_DIR=$OUTER_BUILD_DIR/files_to_zip
+                FILES_DIR="$OUTER_BUILD_DIR/files_to_zip"
                 rm -rf "$OUTER_BUILD_DIR"
                 mkdir -p "$FILES_DIR"
                 
@@ -308,30 +308,30 @@ runs:
                 )
                 if [ -f .packagerignore ]; then
                   while IFS= read -r line; do
-                    [[ \"$line\" =~ ^#.*$ || -z \"$line\" ]] && continue
-                    EXCLUDES+=(--exclude=\"$line\")
+                    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+                    EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
                 fi
                 
                 rsync -a ./ "$FILES_DIR/" "${EXCLUDES[@]}"
                 
                 # Generate directory tree from FILES_DIR
-                if [ -n \"${{ inputs.dir-tree-file }}\" ]; then
-                  DIR_TREE_PATH=\"$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}\"
+                if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
                   if command -v tree &> /dev/null; then
-                    tree \"$FILES_DIR\" > \"$DIR_TREE_PATH\"
+                    tree "$FILES_DIR" > "$DIR_TREE_PATH"
                   else
-                    find \"$FILES_DIR\" -type f | sort > \"$DIR_TREE_PATH\"
+                    find "$FILES_DIR" -type f | sort > "$DIR_TREE_PATH"
                   fi
-                  echo \"dir_tree_path=$DIR_TREE_PATH\" >> $GITHUB_OUTPUT
+                  echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
                 fi
                 
                 # Create ZIP archive from inside FILES_DIR so the zip contains only the files at the root
-                cd \"$FILES_DIR\"
-                zip -r \"$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip\" .
+                cd "$FILES_DIR"
+                zip -r "$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
                 
-                echo \"package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip\" >> $GITHUB_OUTPUT
+                echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
 
         -   name: Upload extension package zip
             if: inputs.upload-artifact == 'true'
