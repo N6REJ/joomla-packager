@@ -435,7 +435,7 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 
-                # Create build directory (always use root-level 'build')
+                # Clean and create build directory (always use root-level 'build')
                 BUILD_DIR="build"
                 rm -rf "$BUILD_DIR"
                 mkdir -p "$BUILD_DIR"
@@ -525,14 +525,14 @@ runs:
                 find "$BUILD_DIR" -name '*.zip' -delete
                 find "$BUILD_DIR" -name '*.bak' -delete
 
-                # Create ZIP archive with only root-level files and folders (no build/ nesting, no .bak/.zip)
+                # Create ZIP archive at the root, not inside build/
                 cd "$BUILD_DIR"
-                zip -r "${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" ./*
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip ./*
                 cd ..
-                echo "Created ZIP archive: build/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
+                echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
                 
                 # Output package path
-                echo "package_path=build/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" >> $GITHUB_OUTPUT
+                echo "package_path=${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" >> $GITHUB_OUTPUT
 
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
@@ -542,7 +542,7 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.extension_details.outputs.extension_name }} ${{ steps.set_version.outputs.version }}
                 files: |
-                    build/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                    ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                     build/${{ inputs.dir-tree-file }}
                 draft: false
                 prerelease: false
@@ -603,7 +603,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: build/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
+                path: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip
                 retention-days: 90
                 if-no-files-found: warn
 
