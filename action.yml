@@ -448,6 +448,7 @@ runs:
                   --exclude='Thumbs.db'
                   --exclude='node_modules/'
                   --exclude='.packagerignore'
+                  --exclude='build/'
                   --exclude='.gitignore'
                   --exclude='*.bak'
                   --exclude='*.zip'
@@ -460,10 +461,11 @@ runs:
                   done < .packagerignore
                 fi
                 
-                # Use rsync to copy everything except excluded files/folders to build/package dir
+                # Clean and create build/package
                 PKGDIR="$BUILD_DIR/package"
                 rm -rf "$PKGDIR"
                 mkdir -p "$PKGDIR"
+                # Use rsync to copy everything except excluded files/folders to build/package dir
                 rsync -a . "$PKGDIR/" "${EXCLUDES[@]}"
                 
                 # Ensure main files are present (overwrite if needed)
@@ -488,7 +490,7 @@ runs:
                 
                 # Create ZIP archive in build/ with root files ONLY (no build/ in zip, no nested zip)
                 cd "$PKGDIR"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" * .[!.]*
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" ./*
                 cd -
                 
                 # Output package path (.zip)
