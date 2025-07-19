@@ -435,12 +435,13 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 
-                # Clean up any old ZIPs and build directory at the start
+                # Clean up any old ZIPs and package directory at the start
                 rm -f ./*.zip
-                rm -rf build
-                BUILD_DIR="build"
-                mkdir -p "$BUILD_DIR"
-                
+                rm -rf package
+                PACKAGE_DIR="package"
+                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                mkdir -p "$PACKAGE_DIR/$EXTENSION_NAME"
+
                 # Prepare rsync exclude patterns
                 EXCLUDES=(
                   --exclude='.git/'
@@ -475,7 +476,7 @@ runs:
                     EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
                 fi
-                
+
                 # Ensure xmllint is installed for manifest validation
                 if ! command -v xmllint &> /dev/null; then
                   if command -v apt-get &> /dev/null; then
@@ -491,48 +492,31 @@ runs:
                 else
                   echo "::warning::xmllint not found, skipping manifest XML validation."
                 fi
-                
-                # Use rsync to copy everything except excluded files/folders
-                rsync -a ./ "$BUILD_DIR"/ "${EXCLUDES[@]}"
-                
-                # Ensure main files are present (overwrite if needed)
-                cp ${EXTENSION_NAME}.php "$BUILD_DIR"/ 2>/dev/null || true
-                cp "$EXTENSION_XML" "$BUILD_DIR"/
-                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$BUILD_DIR"/; fi
-                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$BUILD_DIR"/; fi
-                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$BUILD_DIR"/; fi
-                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$BUILD_DIR"/; fi
-                
-                echo "Package contents:"
-                ls -la "$BUILD_DIR"/
-                
-                # Generate directory tree if requested
-                if [ -n "${{ inputs.dir-tree-file }}" ]; then
-                  # Check if tree is available, if not try to install it
-                  if ! command -v tree &> /dev/null; then
-                    if command -v apt-get &> /dev/null; then
-                      sudo apt-get update && sudo apt-get install -y tree
-                    fi
-                  fi
-                
-                  if command -v tree &> /dev/null; then
-                    tree "$BUILD_DIR" > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  else
-                    # Fallback to find if tree is not available
-                    find "$BUILD_DIR" -type f | sort > "$BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  fi
-                fi
-                
-                # Remove any .zip and .bak files from the build directory before packaging
-                find "$BUILD_DIR" -name '*.zip' -delete
-                find "$BUILD_DIR" -name '*.bak' -delete
 
-                # Create ZIP archive at the root, zipping only the contents of build/ (no nesting)
-                cd "$BUILD_DIR"
-                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip ./*
+                # Use rsync to copy everything except excluded files/folders into the extension subdirectory
+                rsync -a ./ "$PACKAGE_DIR/$EXTENSION_NAME/" "${EXCLUDES[@]}"
+
+                # Ensure main files are present (overwrite if needed)
+                cp ${EXTENSION_NAME}.php "$PACKAGE_DIR/$EXTENSION_NAME/" 2>/dev/null || true
+                cp "$EXTENSION_XML" "$PACKAGE_DIR/$EXTENSION_NAME/"
+                if [ -f "${{ inputs.helper-file }}" ]; then cp "${{ inputs.helper-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
+                if [ -f "${{ inputs.license-file }}" ]; then cp "${{ inputs.license-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
+                if [ -n "${{ inputs.favicon-file }}" ] && [ -f "${{ inputs.favicon-file }}" ]; then cp "${{ inputs.favicon-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
+                if [ -f "${{ inputs.changelog-file }}" ]; then cp "${{ inputs.changelog-file }}" "$PACKAGE_DIR/$EXTENSION_NAME/"; fi
+
+                echo "Package contents:"
+                ls -la "$PACKAGE_DIR/$EXTENSION_NAME/"
+
+                # Remove any .zip and .bak files from the extension subdirectory before packaging
+                find "$PACKAGE_DIR/$EXTENSION_NAME" -name '*.zip' -delete
+                find "$PACKAGE_DIR/$EXTENSION_NAME" -name '*.bak' -delete
+
+                # Create ZIP archive at the root, zipping only the extension subdirectory (Joomla standard)
+                cd "$PACKAGE_DIR"
+                zip -r ../${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip "$EXTENSION_NAME"
                 cd ..
                 echo "Created ZIP archive: ${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                
+
                 # Output package path
                 echo "package_path=${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip" >> $GITHUB_OUTPUT
 
