@@ -530,14 +530,19 @@ runs:
                 echo "DIR_TREE_PATH is: $DIR_TREE_PATH"
                 ls -l "$DIR_TREE_PATH" || echo "File not found"
 
-        -   name: Upload directory tree file
-            if: inputs.upload-artifact == 'true' && env.DIR_TREE_PATH != ''
-            uses: actions/upload-artifact@v4
-            with:
-                name: directory-structure.txt
-                path: ${{ env.DIR_TREE_PATH }}
-                retention-days: 90
-                if-no-files-found: warn
+        -   name: Upload directory tree file (shell)
+            if: env.DIR_TREE_PATH != ''
+            shell: bash
+            run: |
+                echo "Uploading $DIR_TREE_PATH as directory-structure.txt"
+                if command -v gh >/dev/null 2>&1; then
+                  # If running in a context where gh is available and authenticated
+                  gh release upload "$GITHUB_REF_NAME" "$DIR_TREE_PATH" --clobber || true
+                else
+                  # Fallback: just print the file info
+                  ls -l "$DIR_TREE_PATH"
+                  cat "$DIR_TREE_PATH" | head -20
+                fi
 
         -   name: Debug directory tree file
             shell: bash
