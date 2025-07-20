@@ -496,6 +496,12 @@ runs:
                 fi
                 echo "DIR_TREE_PATH=$TREE_FILE" >> $GITHUB_ENV
 
+        -   name: Debug package_path before upload
+            shell: bash
+            run: |
+                echo "package_path is: ${{ steps.create_package.outputs.package_path }}"
+                ls -l "${{ steps.create_package.outputs.package_path }}" || echo "Directory not found"
+
         -   name: Upload extension package files
             if: inputs.upload-artifact == 'true'
             uses: actions/upload-artifact@v4
@@ -504,6 +510,10 @@ runs:
                 path: ${{ steps.create_package.outputs.package_path }}
                 retention-days: 90
                 if-no-files-found: warn
+
+        -   name: Print all enviornment variables
+            shell: bash
+            run: env
 
         -   name: Upload extension package zip
             if: inputs.upload-artifact == 'true'
