@@ -136,7 +136,6 @@ outputs:
     dir-tree-path:
         description: 'Path to the directory tree file'
         value: ${{ steps.create_package.outputs.dir_tree_path }}
-
 runs:
     using: 'composite'
     steps:
