@@ -490,6 +490,11 @@ runs:
                 cp "${{ steps.create_package.outputs.dir_tree_path }}" "./directory-structure.txt"
                 echo "dir_tree_path_ws=$(pwd)/directory-structure.txt" >> $GITHUB_ENV
 
+        -   name: Debug tag for release
+            shell: bash
+            run: |
+                echo "DEBUG: tag_name is ${{ steps.set_version.outputs.version }}"
+
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
             uses: softprops/action-gh-release@v1
