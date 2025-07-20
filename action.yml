@@ -495,6 +495,11 @@ runs:
             run: |
                 echo "DEBUG: tag_name is ${{ steps.set_version.outputs.version }}"
 
+        -   name: Debug set_version output
+            shell: bash
+            run: |
+                echo "DEBUG: set_version.outputs.version is ${{ steps.set_version.outputs.version }}"
+
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
             uses: softprops/action-gh-release@v1
