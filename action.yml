@@ -497,8 +497,8 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.set_version.outputs.version }} Release
                 files: |
-                    ${{ steps.create_package.outputs.package_zip }}
-                    ${{ env.dir_tree_path_ws }}
+                  ${{ steps.create_package.outputs.package_zip }}
+                  ${{ env.dir_tree_path_ws }}
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
