@@ -514,6 +514,12 @@ runs:
                 retention-days: 90
                 if-no-files-found: warn
 
+        -   name: Debug DIR_TREE_PATH before upload
+            shell: bash
+            run: |
+                echo "DIR_TREE_PATH is: $DIR_TREE_PATH"
+                ls -l "$DIR_TREE_PATH" || echo "File not found"
+
         -   name: Upload directory tree file
             if: inputs.upload-artifact == 'true' && env.DIR_TREE_PATH != ''
             uses: actions/upload-artifact@v4
