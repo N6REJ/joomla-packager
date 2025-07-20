@@ -277,131 +277,209 @@ runs:
                 echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
                 echo "current_year=$CURRENT_YEAR" >> $GITHUB_OUTPUT
 
-        -   name: Create package
-            id: create_package
+        -   name: Update XML file
+            if: inputs.file-updates == 'true'
             shell: bash
             run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                VERSION="${{ steps.set_version.outputs.version }}"
-
-                if [ -n "$RUNNER_TEMP" ]; then
-                  OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
-                else
-                  OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
-                fi
-                rm -rf "$OUTER_BUILD_DIR"
-                mkdir -p "$OUTER_BUILD_DIR"
-
-                EXCLUDES=(
-                  --exclude='.git/'
-                  --exclude='.github/'
-                  --exclude='.DS_Store'
-                  --exclude='Thumbs.db'
-                  --exclude='node_modules/'
-                  --exclude='.packagerignore'
-                  --exclude='build/'
-                  --exclude='package/'
-                  --exclude='.gitignore'
-                  --exclude='*.bak'
-                  --exclude='*.zip'
-                )
-                if [ -f .packagerignore ]; then
-                  while IFS= read -r line; do
-                    [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
-                    EXCLUDES+=(--exclude="$line")
-                  done < .packagerignore
-                fi
-
-                rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
-
-                echo "Contents of OUTER_BUILD_DIR before zipping/upload:"
-                ls -l "$OUTER_BUILD_DIR"
-
-                # Create the extension zip for both artifact and release
-                cd "$OUTER_BUILD_DIR"
-                zip -r "${EXTENSION_NAME}_${VERSION}.zip" .
-                cd -
-                echo "package_zip=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
-
-                # Generate directory tree from OUTER_BUILD_DIR
-                if [ -n "${{ inputs.dir-tree-file }}" ]; then
-                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  if command -v tree &> /dev/null; then
-                    tree "$OUTER_BUILD_DIR" > "$DIR_TREE_PATH"
-                  else
-                    find "$OUTER_BUILD_DIR" -type f | sort > "$DIR_TREE_PATH"
-                  fi
-                  echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
-                fi
-
-        -   name: Upload extension package zip
-            if: inputs.upload-artifact == 'true'
-            uses: actions/upload-artifact@v4
-            with:
-                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ steps.create_package.outputs.package_zip }}
-                retention-days: 90
-                if-no-files-found: warn
-
-        -   name: Upload directory tree file
-            if: inputs.upload-artifact == 'true' && steps.create_package.outputs.dir_tree_path != ''
-            uses: actions/upload-artifact@v4
-            with:
-                name: directory-structure.txt
-                path: ${{ steps.create_package.outputs.dir_tree_path }}
-                retention-days: 90
-                if-no-files-found: warn
-
-        -   name: Debug directory tree file
-            shell: bash
-            run: |
-                echo "dir_tree_path: ${{ steps.create_package.outputs.dir_tree_path }}"
-                ls -l "${{ steps.create_package.outputs.dir_tree_path }}" || echo "File not found"
-
-        -   name: Move directory tree file to workspace
-            if: steps.create_package.outputs.dir_tree_path != ''
-            shell: bash
-            run: |
-                cp "${{ steps.create_package.outputs.dir_tree_path }}" "./directory-structure.txt"
-                echo "dir_tree_path_ws=$(pwd)/directory-structure.txt" >> $GITHUB_ENV
-
-        -   name: Create GitHub Release
-            if: inputs.create-release == 'true'
-            uses: softprops/action-gh-release@v1
-            with:
-                tag_name: ${{ steps.set_version.outputs.version }}
-                name: ${{ steps.set_version.outputs.version }} Release
-                files: |
-                  ${{ steps.create_package.outputs.package_zip }}
-                  ${{ env.dir_tree_path_ws }}
-            env:
-                GITHUB_TOKEN: ${{ inputs.github-token }}
-
-        -   name: Update Joomla update server XML
-            if: inputs.update-joomla-server == 'true'
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                VERSION="${{ steps.set_version.outputs.version }}"
-                UPDATES_XML="${{ inputs.updates-xml-file }}"
-                echo "DEBUG: EXTENSION_NAME=$EXTENSION_NAME"
-                echo "DEBUG: VERSION=$VERSION"
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-
-                  DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
-                  echo "DEBUG: DOWNLOAD_URL=$DOWNLOAD_URL"
-
+                XML_FILE="${{ steps.extension_details.outputs.extension_xml }}"
+                if [ -f "$XML_FILE" ]; then
+                  cp "$XML_FILE" "${XML_FILE}.bak"
                   # Update version
-                  sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
-
-                  # Remove any existing <downloadurl ...>...</downloadurl> line
-                  sed -i '/<downloadurl[^>]*>.*<\/downloadurl>/d' "$UPDATES_XML"
-                  # Insert the new downloadurl after the <downloads> tag
-                  sed -i "/<downloads>/a <downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>" "$UPDATES_XML"
-
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
+                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$XML_FILE"
+                  # Update creation date
+                  sed -i "s|<creationDate>.*</creationDate>|<creationDate>${{ steps.set_version.outputs.creation_date }}</creationDate>|g" "$XML_FILE"
+                  # Update copyright
+                  if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
+                    sed -i "s|Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$XML_FILE"
+                  else
+                    sed -i "s|Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$XML_FILE"
+                  fi
                 else
-                  echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
+                  echo "::error::XML file not found: $XML_FILE"
+                  exit 1
                 fi
+
+        -   name: Update PHP files
+            if: inputs.file-updates == 'true'
+            shell: bash
+            run: |
+                find . -name "*.php" | while read -r PHP_FILE; do
+                  if [ -f "$PHP_FILE" ]; then
+                    if grep -q "@version" "$PHP_FILE"; then
+                      sed -i -E "s|(@version[ ]+).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                      sed -i -E "s|(Version[ ]*:).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                      sed -i -E "s|(\\* Version:)[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                      sed -i "s|@copyright.*|@copyright Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$PHP_FILE"
+                    fi
+                  fi
+                done
+
+        -   name: Update language files
+            if: inputs.file-updates == 'true'
+            shell: bash
+            run: |
+                find . -name "*.ini" -o -name "*.sys.ini" | while read -r LANG_FILE; do
+                  if [ -f "$LANG_FILE" ]; then
+                    if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
+                      sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                      sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                    else
+                      sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                      sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                    fi
+                  fi
+                done
+
+        -   name: Update CSS files
+            if: inputs.file-updates == 'true'
+            shell: bash
+            run: |
+                find . -name "*.css" | while read -r CSS_FILE; do
+                  if [ -f "$CSS_FILE" ]; then
+                    if grep -q "Copyright (C)" "$CSS_FILE"; then
+                      if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
+                        sed -i "s|/\\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \\*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                        sed -i "s|/\\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \\*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                        sed -i "s| \\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                        sed -i "s| \\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                      else
+                        sed -i "s|/\\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \\*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                        sed -i "s|/\\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \\*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                        sed -i "s| \\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                        sed -i "s| \\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                      fi
+                    fi
+                    if grep -q "\\* Version:[0-9]\\{4\\}\\.[0-9\\]{2\\}\\.[0-9\\]{2\\}" "$CSS_FILE"; then
+                      sed -i -E "s|(\\* Version:)[0-9]{4}\\.[0-9]{2}\\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$CSS_FILE"
+                    fi
+                  fi
+                done
+                
+                -   name: Create package
+                  id: create_package
+                  shell: bash
+                  run: |
+                      EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                      VERSION="${{ steps.set_version.outputs.version }}"
+                
+                      if [ -n "$RUNNER_TEMP" ]; then
+                        OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
+                      else
+                        OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
+                      fi
+                      rm -rf "$OUTER_BUILD_DIR"
+                      mkdir -p "$OUTER_BUILD_DIR"
+                
+                      EXCLUDES=(
+                        --exclude='.git/'
+                        --exclude='.github/'
+                        --exclude='.DS_Store'
+                        --exclude='Thumbs.db'
+                        --exclude='node_modules/'
+                        --exclude='.packagerignore'
+                        --exclude='build/'
+                        --exclude='package/'
+                        --exclude='.gitignore'
+                        --exclude='*.bak'
+                        --exclude='*.zip'
+                      )
+                      if [ -f .packagerignore ]; then
+                        while IFS= read -r line; do
+                          [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+                          EXCLUDES+=(--exclude="$line")
+                        done < .packagerignore
+                      fi
+                
+                      rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
+                
+                      echo "Contents of OUTER_BUILD_DIR before zipping/upload:"
+                      ls -l "$OUTER_BUILD_DIR"
+                
+                      # Create the extension zip for both artifact and release
+                      cd "$OUTER_BUILD_DIR"
+                      zip -r "${EXTENSION_NAME}_${VERSION}.zip" .
+                      cd -
+                      echo "package_zip=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
+                
+                      # Generate directory tree from OUTER_BUILD_DIR
+                      if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                        DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                        if command -v tree &> /dev/null; then
+                          tree "$OUTER_BUILD_DIR" > "$DIR_TREE_PATH"
+                        else
+                          find "$OUTER_BUILD_DIR" -type f | sort > "$DIR_TREE_PATH"
+                        fi
+                        echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
+                      fi
+                
+                -   name: Upload extension package zip
+                  if: inputs.upload-artifact == 'true'
+                  uses: actions/upload-artifact@v4
+                  with:
+                      name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
+                      path: ${{ steps.create_package.outputs.package_zip }}
+                      retention-days: 90
+                      if-no-files-found: warn
+                
+                -   name: Upload directory tree file
+                  if: inputs.upload-artifact == 'true' && steps.create_package.outputs.dir_tree_path != ''
+                  uses: actions/upload-artifact@v4
+                  with:
+                      name: directory-structure.txt
+                      path: ${{ steps.create_package.outputs.dir_tree_path }}
+                      retention-days: 90
+                      if-no-files-found: warn
+                
+                -   name: Debug directory tree file
+                  shell: bash
+                  run: |
+                      echo "dir_tree_path: ${{ steps.create_package.outputs.dir_tree_path }}"
+                      ls -l "${{ steps.create_package.outputs.dir_tree_path }}" || echo "File not found"
+                
+                -   name: Move directory tree file to workspace
+                  if: steps.create_package.outputs.dir_tree_path != ''
+                  shell: bash
+                  run: |
+                      cp "${{ steps.create_package.outputs.dir_tree_path }}" "./directory-structure.txt"
+                      echo "dir_tree_path_ws=$(pwd)/directory-structure.txt" >> $GITHUB_ENV
+                
+                -   name: Create GitHub Release
+                  if: inputs.create-release == 'true'
+                  uses: softprops/action-gh-release@v1
+                  with:
+                      tag_name: ${{ steps.set_version.outputs.version }}
+                      name: ${{ steps.set_version.outputs.version }} Release
+                      files: |
+                        ${{ steps.create_package.outputs.package_zip }}
+                        ${{ env.dir_tree_path_ws }}
+                  env:
+                      GITHUB_TOKEN: ${{ inputs.github-token }}
+                
+                -   name: Update Joomla update server XML
+                  if: inputs.update-joomla-server == 'true'
+                  shell: bash
+                  run: |
+                      EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                      VERSION="${{ steps.set_version.outputs.version }}"
+                      UPDATES_XML="${{ inputs.updates-xml-file }}"
+                      echo "DEBUG: EXTENSION_NAME=$EXTENSION_NAME"
+                      echo "DEBUG: VERSION=$VERSION"
+                      if [ -f "$UPDATES_XML" ]; then
+                        cp "$UPDATES_XML" "${UPDATES_XML}.bak"
+                
+                        DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
+                        echo "DEBUG: DOWNLOAD_URL=$DOWNLOAD_URL"
+                
+                        # Update version
+                        sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
+                
+                        # Remove any existing <downloadurl ...>...</downloadurl> line
+                        sed -i '/<downloadurl[^>]*>.*<\/downloadurl>/d' "$UPDATES_XML"
+                        # Insert the new downloadurl after the <downloads> tag
+                        sed -i "/<downloads>/a <downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>" "$UPDATES_XML"
+                
+                        echo "Updated $UPDATES_XML file with new version and download URL"
+                        cat "$UPDATES_XML"
+                      else
+                        echo "::warning::${{ inputs.updates-xml-file }} file not found in repository"
+                      fi
