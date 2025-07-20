@@ -334,6 +334,43 @@ runs:
                   echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
                 fi
 
+        -   name: Ensure changelog exists
+            shell: bash
+            run: |
+                if [ ! -f "${{ inputs.changelog-file }}" ]; then
+                  echo "# Changelog" > "${{ inputs.changelog-file }}"
+                  echo "" >> "${{ inputs.changelog-file }}"
+                  echo "Initial changelog created." >> "${{ inputs.changelog-file }}"
+                fi
+
+        -   name: Ensure updates.xml exists
+            shell: bash
+            run: |
+                if [ ! -f "${{ inputs.updates-xml-file }}" ]; then
+                  cat <<EOF > "${{ inputs.updates-xml-file }}"
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+    <update>
+        <name>${{ steps.extension_details.outputs.extension_name }}</name>
+        <description>Initial update file</description>
+        <element>${{ steps.extension_details.outputs.extension_name }}</element>
+        <type>${{ inputs.extension-type }}</type>
+        <version>${{ steps.set_version.outputs.version }}</version>
+        <downloads>
+            <downloadurl type="full" format="zip">https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}.zip</downloadurl>
+        </downloads>
+        <tags>
+            <tag>stable</tag>
+        </tags>
+        <maintainer>${{ inputs.author }}</maintainer>
+        <maintainerurl></maintainerurl>
+        <targetplatform name="joomla" version="4.*" />
+        <client>site</client>
+    </update>
+</updates>
+EOF
+                fi
+
         -   name: Generate filtered changelog
             shell: bash
             run: |
