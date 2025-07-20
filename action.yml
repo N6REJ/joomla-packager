@@ -340,17 +340,20 @@ runs:
                 PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
                 CURR_TAG="${{ steps.set_version.outputs.version }}"
                 CHANGELOG_FILE="${{ inputs.changelog-file }}"
-                {
-                  echo "## [${CURR_TAG}] - $(date +'%Y-%m-%d')"
-                  echo ""
-                  git log --pretty=format:"*   %s (%h)" ${PREV_TAG}..HEAD | grep -v "Update version to \\[skip ci\\]"
-                  echo ""
-                } > temp_changelog.md
-                # Prepend to existing changelog if it exists
-                if [ -f "$CHANGELOG_FILE" ]; then
-                  tail -n +2 "$CHANGELOG_FILE" >> temp_changelog.md
+                CHANGES=$(git log --pretty=format:"*   %s (%h)" ${PREV_TAG}..HEAD | grep -v "Update version to \\[skip ci\\]")
+                if [ -n "$CHANGES" ]; then
+                  {
+                    echo "## [${CURR_TAG}] - $(date +'%Y-%m-%d')"
+                    echo ""
+                    echo "$CHANGES"
+                    echo ""
+                  } > temp_changelog.md
+                  # Prepend to existing changelog if it exists
+                  if [ -f "$CHANGELOG_FILE" ]; then
+                    tail -n +2 "$CHANGELOG_FILE" >> temp_changelog.md
+                  fi
+                  mv temp_changelog.md "$CHANGELOG_FILE"
                 fi
-                mv temp_changelog.md "$CHANGELOG_FILE"
 
         -   name: Upload extension package zip
             if: inputs.upload-artifact == 'true'
