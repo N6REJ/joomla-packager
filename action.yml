@@ -121,25 +121,25 @@ inputs:
         default: 'true'
 
 outputs:
-    version:
-        description: 'The generated version number'
-        value: ${{ steps.set_version.outputs.version }}
-    creation-date:
-        description: 'The creation date'
-        value: ${{ steps.set_version.outputs.creation_date }}
-    package-path:
-        description: 'Path to the created package'
-        value: ${{ steps.create_package.outputs.package_path }}
-    release-url:
-        description: 'URL of the created release'
-        value: ${{ steps.create_release.outputs.url }}
-    dir-tree-path:
-        description: 'Path to the directory tree file'
-        value: ${{ steps.create_package.outputs.dir_tree_path }}
+  version:
+    description: 'The generated version number'
+    value: ${{ steps.set_version.outputs.version }}
+  creation-date:
+    description: 'The creation date'
+    value: ${{ steps.set_version.outputs.creation_date }}
+  package-path:
+    description: 'Path to the created package'
+    value: ${{ steps.create_package.outputs.package_path }}
+  release-url:
+    description: 'URL of the created release'
+    value: ${{ steps.create_release.outputs.url }}
+  dir-tree-path:
+    description: 'Path to the directory tree file'
+    value: ${{ steps.create_package.outputs.dir_tree_path }}
 
 runs:
-    using: 'composite'
-    steps:
+  using: 'composite'
+  steps:
         -   name: Determine extension details
             id: extension_details
             shell: bash
