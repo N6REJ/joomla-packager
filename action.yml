@@ -352,13 +352,28 @@ runs:
                 retention-days: 90
                 if-no-files-found: warn
 
+        -   name: Debug directory tree file
+            shell: bash
+            run: |
+                echo "dir_tree_path: ${{ steps.create_package.outputs.dir_tree_path }}"
+                ls -l "${{ steps.create_package.outputs.dir_tree_path }}" || echo "File not found"
+
+        -   name: Move directory tree file to workspace
+            if: steps.create_package.outputs.dir_tree_path != ''
+            shell: bash
+            run: |
+                cp "${{ steps.create_package.outputs.dir_tree_path }}" "./directory-structure.txt"
+                echo "dir_tree_path_ws=$(pwd)/directory-structure.txt" >> $GITHUB_ENV
+
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
             uses: softprops/action-gh-release@v1
             with:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: Release ${{ steps.set_version.outputs.version }}
-                files: ${{ steps.create_package.outputs.package_zip }}
+                files: |
+                  ${{ steps.create_package.outputs.package_zip }}
+                  ${{ env.dir_tree_path_ws }}
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
