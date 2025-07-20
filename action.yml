@@ -328,7 +328,7 @@ runs:
                 
                 # Create ZIP archive from inside FILES_DIR so the zip contains only the files at the root
                 cd "$FILES_DIR"
-                zip -r "$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" .
+                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
                 cd -
                 
                 echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
