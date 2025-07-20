@@ -370,7 +370,7 @@ runs:
             uses: softprops/action-gh-release@v1
             with:
                 tag_name: ${{ steps.set_version.outputs.version }}
-                name: Release ${{ steps.set_version.outputs.version }}
+                name: ${{ steps.set_version.outputs.version }} Release
                 files: |
                   ${{ steps.create_package.outputs.package_zip }}
                   ${{ env.dir_tree_path_ws }}
@@ -384,10 +384,13 @@ runs:
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
                 VERSION="${{ steps.set_version.outputs.version }}"
                 UPDATES_XML="${{ inputs.updates-xml-file }}"
+                echo "DEBUG: EXTENSION_NAME=$EXTENSION_NAME"
+                echo "DEBUG: VERSION=$VERSION"
                 if [ -f "$UPDATES_XML" ]; then
                   cp "$UPDATES_XML" "${UPDATES_XML}.bak"
 
                   DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
+                  echo "DEBUG: DOWNLOAD_URL=$DOWNLOAD_URL"
 
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
