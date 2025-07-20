@@ -477,7 +477,8 @@ runs:
                 ls -l "$OUTER_BUILD_DIR"
                 echo "package_path=$OUTER_BUILD_DIR" >> $GITHUB_OUTPUT
 
-        -   name: Create release zip
+        -   name: Generate directory tree file
+            id: dir_tree
             shell: bash
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
@@ -487,10 +488,13 @@ runs:
                 else
                   OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
                 fi
-                cd "$OUTER_BUILD_DIR"
-                zip -r "../${EXTENSION_NAME}_${VERSION}.zip" .
-                cd -
-                echo "release_zip=$OUTER_BUILD_DIR/../${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_ENV
+                TREE_FILE="$OUTER_BUILD_DIR/directory-structure.txt"
+                if command -v tree >/dev/null 2>&1; then
+                  tree -a "$OUTER_BUILD_DIR" > "$TREE_FILE"
+                else
+                  find "$OUTER_BUILD_DIR" > "$TREE_FILE"
+                fi
+                echo "dir_tree_path=$TREE_FILE" >> $GITHUB_OUTPUT
 
         -   name: Upload extension package files
             if: inputs.upload-artifact == 'true'
@@ -511,25 +515,25 @@ runs:
                 if-no-files-found: warn
 
         -   name: Upload directory tree file
-            if: inputs.upload-artifact == 'true' && steps.create_package.outputs.dir_tree_path != ''
+            if: inputs.upload-artifact == 'true' && steps.dir_tree.outputs.dir_tree_path != ''
             uses: actions/upload-artifact@v4
             with:
                 name: directory-structure.txt
-                path: ${{ steps.create_package.outputs.dir_tree_path }}
+                path: ${{ steps.dir_tree.outputs.dir_tree_path }}
                 retention-days: 90
                 if-no-files-found: warn
 
         -   name: Debug directory tree file
             shell: bash
             run: |
-                echo "dir_tree_path: ${{ steps.create_package.outputs.dir_tree_path }}"
-                ls -l "${{ steps.create_package.outputs.dir_tree_path }}" || echo "File not found"
+                echo "dir_tree_path: ${{ steps.dir_tree.outputs.dir_tree_path }}"
+                ls -l "${{ steps.dir_tree.outputs.dir_tree_path }}" || echo "File not found"
 
         -   name: Move directory tree file to workspace
-            if: steps.create_package.outputs.dir_tree_path != ''
+            if: steps.dir_tree.outputs.dir_tree_path != ''
             shell: bash
             run: |
-                cp "${{ steps.create_package.outputs.dir_tree_path }}" "./directory-structure.txt"
+                cp "${{ steps.dir_tree.outputs.dir_tree_path }}" "./directory-structure.txt"
                 echo "dir_tree_path_ws=$(pwd)/directory-structure.txt" >> $GITHUB_ENV
 
         -   name: Debug tag for release
@@ -542,6 +546,22 @@ runs:
             run: |
                 echo "DEBUG: set_version.outputs.version is ${{ steps.set_version.outputs.version }}"
 
+        -   name: Create release zip for GitHub Release
+            if: inputs.create-release == 'true'
+            shell: bash
+            run: |
+                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                VERSION="${{ steps.set_version.outputs.version }}"
+                if [ -n "$RUNNER_TEMP" ]; then
+                  OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
+                else
+                  OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
+                fi
+                ZIP_PATH="${OUTER_BUILD_DIR}/../${EXTENSION_NAME}_${VERSION}.zip"
+                cd "$OUTER_BUILD_DIR"
+                zip -r "$ZIP_PATH" .
+                cd -
+                echo "ZIP_PATH=$ZIP_PATH" >> $GITHUB_ENV
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
             uses: softprops/action-gh-release@v1
@@ -549,7 +569,7 @@ runs:
                 tag_name: ${{ steps.set_version.outputs.version }}
                 name: ${{ steps.set_version.outputs.version }} Release
                 files: |
-                  ${{ steps.create_package.outputs.package_zip }}
+                  ${{ env.ZIP_PATH }}
                   ${{ env.dir_tree_path_ws }}
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
