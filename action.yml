@@ -339,7 +339,7 @@ runs:
             uses: actions/upload-artifact@v4
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ steps.create_package.outputs.package_path }}
+                path: ${{ steps.create_package.outputs.package_zip }}
                 retention-days: 90
                 if-no-files-found: warn
 
