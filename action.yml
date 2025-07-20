@@ -351,6 +351,17 @@ runs:
                 path: ${{ steps.create_package.outputs.dir_tree_path }}
                 retention-days: 90
                 if-no-files-found: warn
+
+        -   name: Create GitHub Release
+            if: inputs.create-release == 'true'
+            uses: softprops/action-gh-release@v1
+            with:
+                tag_name: ${{ steps.set_version.outputs.version }}
+                name: Release ${{ steps.set_version.outputs.version }}
+                files: ${{ steps.create_package.outputs.package_zip }}
+            env:
+                GITHUB_TOKEN: ${{ inputs.github-token }}
+
         -   name: Update Joomla update server XML
             if: inputs.update-joomla-server == 'true'
             shell: bash
