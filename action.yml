@@ -241,6 +241,42 @@ runs:
             with:
                 php-version: ${{ inputs.php-version }}
 
+        -   name: Generate version and dates
+            id: set_version
+            shell: bash
+            run: |
+                CREATION_DATE=$(date +'%Y %B %d')
+                CURRENT_YEAR=$(date +'%Y')
+                
+                # Check if manual version is provided
+                if [ -n "${{ inputs.manual-version }}" ]; then
+                  VERSION="${{ inputs.manual-version }}"
+                  echo "Using manual version: $VERSION"
+                else
+                  # Use automatic date-based versioning
+                  BASE_VERSION=$(date +'%Y.%m.%d')
+                
+                  git fetch --tags
+                
+                  if git rev-parse "$BASE_VERSION" >/dev/null 2>&1; then
+                    MATCHING_TAGS=$(git tag -l "$BASE_VERSION.*")
+                    if [ -z "$MATCHING_TAGS" ]; then
+                      VERSION="${BASE_VERSION}.1"
+                    else
+                      HIGHEST_SUBVERSION=$(echo "$MATCHING_TAGS" | sed "s/^$BASE_VERSION\.//" | sort -n | tail -1)
+                      NEXT_SUBVERSION=$((HIGHEST_SUBVERSION + 1))
+                      VERSION="${BASE_VERSION}.$NEXT_SUBVERSION"
+                    fi
+                  else
+                    VERSION="$BASE_VERSION"
+                  fi
+                  echo "Using automatic version: $VERSION"
+                fi
+                
+                echo "version=$VERSION" >> $GITHUB_OUTPUT
+                echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
+                echo "current_year=$CURRENT_YEAR" >> $GITHUB_OUTPUT
+
         -   name: Update Joomla update server XML
             if: inputs.update-joomla-server == 'true'
             shell: bash
