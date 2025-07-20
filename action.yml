@@ -314,17 +314,10 @@ runs:
 
                 rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
 
-                echo "Contents of OUTER_BUILD_DIR before zipping:"
+                echo "Contents of OUTER_BUILD_DIR before upload:"
                 ls -l "$OUTER_BUILD_DIR"
 
-                cd "$OUTER_BUILD_DIR"
-                zip -r "${EXTENSION_NAME}_${VERSION}.zip" .
-                cd -
-
-                echo "Contents of OUTER_BUILD_DIR after zipping:"
-                ls -l "$OUTER_BUILD_DIR"
-
-                echo "package_path=$OUTER_BUILD_DIR/${EXTENSION_NAME}_${VERSION}.zip" >> $GITHUB_OUTPUT
+                echo "package_path=$OUTER_BUILD_DIR" >> $GITHUB_OUTPUT
 
         -   name: Upload extension package zip
             if: inputs.upload-artifact == 'true'
