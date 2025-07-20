@@ -562,6 +562,7 @@ runs:
                 zip -r "$ZIP_PATH" .
                 cd -
                 echo "ZIP_PATH=$ZIP_PATH" >> $GITHUB_ENV
+
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
             uses: softprops/action-gh-release@v1
