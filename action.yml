@@ -316,6 +316,16 @@ runs:
 
                 echo "Contents of OUTER_BUILD_DIR before upload:"
                 ls -l "$OUTER_BUILD_DIR"
+                # Generate directory tree from OUTER_BUILD_DIR
+                if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                  if command -v tree &> /dev/null; then
+                    tree "$OUTER_BUILD_DIR" > "$DIR_TREE_PATH"
+                  else
+                    find "$OUTER_BUILD_DIR" -type f | sort > "$DIR_TREE_PATH"
+                  fi
+                  echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
+                fi
 
                 echo "package_path=$OUTER_BUILD_DIR" >> $GITHUB_OUTPUT
 
