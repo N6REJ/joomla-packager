@@ -395,8 +395,10 @@ runs:
                   # Update version
                   sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
 
-                  # Update download URL
-                  sed -i "s|<downloadurl>.*</downloadurl>|<downloadurl>$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                  # Remove any existing <downloadurl ...>...</downloadurl> line
+                  sed -i '/<downloadurl[^>]*>.*<\/downloadurl>/d' "$UPDATES_XML"
+                  # Insert the new downloadurl after the <downloads> tag
+                  sed -i "/<downloads>/a <downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>" "$UPDATES_XML"
 
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
