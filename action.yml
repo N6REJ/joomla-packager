@@ -580,3 +580,10 @@ runs:
                 else
                   echo "::warning::${{ inputs.updates-xml-file }} file could not be created."
                 fi
+
+        -   name: Cleanup repo files
+            if: always()
+            shell: bash
+            run: |
+                rm -f directory-structure.txt updates.xml.bak
+                echo "Removed directory-structure.txt and updates.xml.bak from repo root if present."
