@@ -537,11 +537,11 @@ runs:
                 TAG_NAME="${{ steps.set_version.outputs.version }}"
                 RELEASE_NAME="${{ steps.set_version.outputs.version }} Release"
                 ZIP_PATH="$ZIP_PATH"
-                DIR_TREE_PATH="$dir_tree_path"
+                DIR_TREE_PATH="${{ steps.create_package.outputs.dir_tree_path }}"
                 echo "Creating GitHub Release with tag: $TAG_NAME"
                 echo "ZIP: $ZIP_PATH"
-                echo "DIR TREE: $DIR_TREE_PATH"
-                gh release create "$TAG_NAME" "$ZIP_PATH" "$DIR_TREE_PATH" --title "$RELEASE_NAME" --notes "Automated release by workflow" || gh release upload "$TAG_NAME" "$ZIP_PATH" "$DIR_TREE_PATH" --clobber
+                echo "DIR TREE: ${{ steps.create_package.outputs.dir_tree_path }}"
+                gh release create "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --title "$RELEASE_NAME" --notes "Automated release by workflow" || gh release upload "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --clobber
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
