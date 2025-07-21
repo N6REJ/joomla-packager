@@ -532,13 +532,16 @@ runs:
 
         -   name: Create GitHub Release
             if: inputs.create-release == 'true'
-            uses: softprops/action-gh-release@v1
-            with:
-                tag_name: ${{ steps.set_version.outputs.version }}
-                name: ${{ steps.set_version.outputs.version }} Release
-                files: |
-                  ${{ env.ZIP_PATH }}
-                  ${{ env.dir_tree_path_ws }}
+            shell: bash
+            run: |
+                TAG_NAME="${{ steps.set_version.outputs.version }}"
+                RELEASE_NAME="${{ steps.set_version.outputs.version }} Release"
+                ZIP_PATH="$ZIP_PATH"
+                DIR_TREE_PATH_WS="$dir_tree_path_ws"
+                echo "Creating GitHub Release with tag: $TAG_NAME"
+                echo "ZIP: $ZIP_PATH"
+                echo "DIR TREE: $DIR_TREE_PATH_WS"
+                gh release create "$TAG_NAME" "$ZIP_PATH" "$DIR_TREE_PATH_WS" --title "$RELEASE_NAME" --notes "Automated release by workflow" || gh release upload "$TAG_NAME" "$ZIP_PATH" "$DIR_TREE_PATH_WS" --clobber
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
