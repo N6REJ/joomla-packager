@@ -119,6 +119,10 @@ inputs:
         description: 'Whether to update Joomla update server XML'
         required: false
         default: 'true'
+    readme:
+        description: 'Include README.md in the package (true/false)'
+        required: false
+        default: 'false'
 
 outputs:
     version:
@@ -464,6 +468,10 @@ runs:
                   --exclude='*.bak'
                   --exclude='*.zip'
                 )
+                # Exclude README.md unless readme input is true
+                if [ "${{ inputs.readme }}" != "true" ]; then
+                  EXCLUDES+=(--exclude='README.md')
+                fi
                 if [ -f .packagerignore ]; then
                   while IFS= read -r line; do
                     [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
