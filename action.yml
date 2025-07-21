@@ -503,15 +503,6 @@ runs:
                 retention-days: 90
                 if-no-files-found: warn
 
-        -   name: Upload extension package zip
-            if: inputs.upload-artifact == 'true'
-            uses: actions/upload-artifact@v4
-            with:
-                name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
-                path: ${{ steps.create_package.outputs.package_zip }}
-                retention-days: 90
-                if-no-files-found: warn
-
         -   name: Debug tag for release
             shell: bash
             run: |
