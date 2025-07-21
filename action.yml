@@ -477,7 +477,7 @@ runs:
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
                   DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
                   if command -v tree &> /dev/null; then
-                    (cd "$OUTER_BUILD_DIR" && tree -a -F . | sed '1s/^\./\//') > "$DIR_TREE_PATH"
+                    (cd "$OUTER_BUILD_DIR" && tree -a -F . | sed '1s|^\./\?$|/|') > "$DIR_TREE_PATH"
                   else
                     find "$OUTER_BUILD_DIR" -type f | sed "s|^$OUTER_BUILD_DIR|/|" | sort > "$DIR_TREE_PATH"
                   fi
