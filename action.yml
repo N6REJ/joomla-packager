@@ -470,31 +470,23 @@ runs:
                     EXCLUDES+=(--exclude="$line")
                   done < .packagerignore
                 fi
+                
+                # Generate directory tree from OUTER_BUILD_DIR
+                if [ -n "${{ inputs.dir-tree-file }}" ]; then
+                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
+                  if command -v tree &> /dev/null; then
+                    tree "$OUTER_BUILD_DIR" > "$DIR_TREE_PATH"
+                  else
+                    find "$OUTER_BUILD_DIR" -type f | sort > "$DIR_TREE_PATH"
+                  fi
+                  echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
+                fi
 
                 rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
 
                 echo "Contents of OUTER_BUILD_DIR before artifact upload:"
                 ls -l "$OUTER_BUILD_DIR"
                 echo "package_path=$OUTER_BUILD_DIR" >> $GITHUB_OUTPUT
-
-        -   name: Generate directory tree file
-            id: dir_tree
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                VERSION="${{ steps.set_version.outputs.version }}"
-                if [ -n "$RUNNER_TEMP" ]; then
-                  OUTER_BUILD_DIR="$RUNNER_TEMP/joomla-build-$EXTENSION_NAME-$VERSION"
-                else
-                  OUTER_BUILD_DIR="/tmp/joomla-build-$EXTENSION_NAME-$VERSION"
-                fi
-                TREE_FILE="$OUTER_BUILD_DIR/directory-structure.txt"
-                if command -v tree >/dev/null 2>&1; then
-                  tree -a "$OUTER_BUILD_DIR" > "$TREE_FILE"
-                else
-                  find "$OUTER_BUILD_DIR" > "$TREE_FILE"
-                fi
-                echo "DIR_TREE_PATH=$TREE_FILE" >> $GITHUB_ENV
 
         -   name: Debug package_path before upload
             shell: bash
