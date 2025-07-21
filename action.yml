@@ -471,6 +471,8 @@ runs:
                   done < .packagerignore
                 fi
                 
+                rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
+
                 # Generate directory tree from OUTER_BUILD_DIR
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
                   DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
@@ -481,8 +483,6 @@ runs:
                   fi
                   echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
                 fi
-
-                rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
 
                 echo "Contents of OUTER_BUILD_DIR before artifact upload:"
                 ls -l "$OUTER_BUILD_DIR"
