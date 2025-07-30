@@ -1,5 +1,4 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/N6REJ/joomla-packager)
-![GitHub top language](https://img.shields.io/github/languages/top/N6REJ/joomla-packager)
 ![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
 
 # Joomla Extension Packager
