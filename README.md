@@ -1,3 +1,7 @@
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/N6REJ/joomla-packager)
+![GitHub top language](https://img.shields.io/github/languages/top/N6REJ/joomla-packager)
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+
 # Joomla Extension Packager
 
 A reusable GitHub composite action for packaging and releasing Joomla extensions. This action automates the entire process of versioning, packaging, and releasing Joomla modules, plugins, and components.<br>
