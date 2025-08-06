@@ -279,6 +279,41 @@ runs:
                 echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
                 echo "current_year=$CURRENT_YEAR" >> $GITHUB_OUTPUT
 
+        -   name: Update extension XML manifest
+            if: inputs.file-updates == 'true'
+            shell: bash
+            run: |
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                VERSION="${{ steps.set_version.outputs.version }}"
+                CREATION_DATE="${{ steps.set_version.outputs.creation_date }}"
+                CURRENT_YEAR="${{ steps.set_version.outputs.current_year }}"
+                
+                if [ -f "$EXTENSION_XML" ]; then
+                  echo "Updating version in $EXTENSION_XML to $VERSION"
+                  cp "$EXTENSION_XML" "${EXTENSION_XML}.bak"
+                  
+                  # Update version tag
+                  sed -i "s|<version>.*</version>|<version>$VERSION</version>|g" "$EXTENSION_XML"
+                  
+                  # Update creation date if present
+                  sed -i "s|<creationDate>.*</creationDate>|<creationDate>$CREATION_DATE</creationDate>|g" "$EXTENSION_XML"
+                  
+                  # Update copyright year if present
+                  if [ -n "${{ inputs.copyright-holder }}" ]; then
+                    if [ -n "${{ inputs.copyright-start-year }}" ] && [ "$CURRENT_YEAR" -gt "${{ inputs.copyright-start-year }}" ]; then
+                      sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) ${{ inputs.copyright-start-year }} - $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$EXTENSION_XML"
+                    else
+                      sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$EXTENSION_XML"
+                    fi
+                  fi
+                  
+                  echo "Updated $EXTENSION_XML with version $VERSION"
+                  echo "Version line in XML:"
+                  grep "<version>" "$EXTENSION_XML" || echo "No version tag found"
+                else
+                  echo "::warning::Extension XML file not found: $EXTENSION_XML"
+                fi
+
         -   name: Update Joomla update server XML
             if: inputs.update-joomla-server == 'true'
             shell: bash
@@ -593,5 +628,5 @@ runs:
             if: always()
             shell: bash
             run: |
-                rm -f directory-structure.txt updates.xml.bak
-                echo "Removed directory-structure.txt and updates.xml.bak from repo root if present."
+                rm -f directory-structure.txt updates.xml.bak *.xml.bak
+                echo "Removed directory-structure.txt and XML backup files from repo root if present."
