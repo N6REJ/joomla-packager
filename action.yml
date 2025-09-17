@@ -288,30 +288,70 @@ runs:
                 CREATION_DATE="${{ steps.set_version.outputs.creation_date }}"
                 CURRENT_YEAR="${{ steps.set_version.outputs.current_year }}"
                 
-                if [ -f "$EXTENSION_XML" ]; then
-                  echo "Updating version in $EXTENSION_XML to $VERSION"
-                  cp "$EXTENSION_XML" "${EXTENSION_XML}.bak"
-                  
-                  # Update version tag
-                  sed -i "s|<version>.*</version>|<version>$VERSION</version>|g" "$EXTENSION_XML"
-                  
-                  # Update creation date if present
-                  sed -i "s|<creationDate>.*</creationDate>|<creationDate>$CREATION_DATE</creationDate>|g" "$EXTENSION_XML"
-                  
-                  # Update copyright year if present
-                  if [ -n "${{ inputs.copyright-holder }}" ]; then
-                    if [ -n "${{ inputs.copyright-start-year }}" ] && [ "$CURRENT_YEAR" -gt "${{ inputs.copyright-start-year }}" ]; then
-                      sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) ${{ inputs.copyright-start-year }} - $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$EXTENSION_XML"
-                    else
-                      sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$EXTENSION_XML"
+                # Function to update XML file
+                update_xml_file() {
+                  local XML_FILE="$1"
+                  if [ -f "$XML_FILE" ]; then
+                    echo "Updating version in $XML_FILE to $VERSION"
+                    cp "$XML_FILE" "${XML_FILE}.bak"
+                    
+                    # Update version tag
+                    sed -i "s|<version>.*</version>|<version>$VERSION</version>|g" "$XML_FILE"
+                    
+                    # Update creation date if present
+                    sed -i "s|<creationDate>.*</creationDate>|<creationDate>$CREATION_DATE</creationDate>|g" "$XML_FILE"
+                    
+                    # Update copyright year if present
+                    if [ -n "${{ inputs.copyright-holder }}" ]; then
+                      if [ -n "${{ inputs.copyright-start-year }}" ] && [ "$CURRENT_YEAR" -gt "${{ inputs.copyright-start-year }}" ]; then
+                        sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) ${{ inputs.copyright-start-year }} - $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$XML_FILE"
+                      else
+                        sed -i "s|<copyright>.*</copyright>|<copyright>Copyright (C) $CURRENT_YEAR ${{ inputs.copyright-holder }}</copyright>|g" "$XML_FILE"
+                      fi
                     fi
+                    
+                    echo "Updated $XML_FILE with version $VERSION"
+                    echo "Version line in XML:"
+                    grep "<version>" "$XML_FILE" || echo "No version tag found"
+                  else
+                    echo "::warning::XML file not found: $XML_FILE"
                   fi
+                }
+                
+                # Update main extension XML
+                update_xml_file "$EXTENSION_XML"
+                
+                # Check if this is a package extension
+                if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
+                  echo "Package extension detected. Updating referenced extension XML files..."
                   
-                  echo "Updated $EXTENSION_XML with version $VERSION"
-                  echo "Version line in XML:"
-                  grep "<version>" "$EXTENSION_XML" || echo "No version tag found"
-                else
-                  echo "::warning::Extension XML file not found: $EXTENSION_XML"
+                  # Extract referenced extension XML files from the package manifest
+                  # Look for <file> tags with type attribute (modules, plugins, components)
+                  REFERENCED_XMLS=$(grep -oP '<file[^>]+>.*?\.xml' "$EXTENSION_XML" | sed 's/.*>\(.*\)/\1/')
+                  
+                  for REF_XML in $REFERENCED_XMLS; do
+                    # Handle relative paths - resolve them relative to the package XML location
+                    PACKAGE_DIR=$(dirname "$EXTENSION_XML")
+                    
+                    # Resolve the path
+                    if [[ "$REF_XML" == /* ]]; then
+                      # Absolute path
+                      RESOLVED_XML="$REF_XML"
+                    else
+                      # Relative path
+                      RESOLVED_XML="$PACKAGE_DIR/$REF_XML"
+                    fi
+                    
+                    # Normalize the path (resolve .. and .)
+                    RESOLVED_XML=$(cd "$(dirname "$RESOLVED_XML")" 2>/dev/null && pwd)/$(basename "$RESOLVED_XML")
+                    
+                    if [ -f "$RESOLVED_XML" ]; then
+                      echo "Updating referenced extension: $RESOLVED_XML"
+                      update_xml_file "$RESOLVED_XML"
+                    else
+                      echo "::warning::Referenced extension XML not found: $RESOLVED_XML (from $REF_XML)"
+                    fi
+                  done
                 fi
 
         -   name: Update Joomla update server XML
@@ -354,58 +394,157 @@ runs:
             if: inputs.file-updates == 'true'
             shell: bash
             run: |
-                find . -name "*.php" | while read -r PHP_FILE; do
-                  if [ -f "$PHP_FILE" ]; then
-                    if grep -q "@version" "$PHP_FILE"; then
-                      sed -i -E "s|(@version[ ]+).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
-                      sed -i -E "s|(Version[ ]*:[ ]*).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
-                      sed -i -E "s|(\* Version:)[0-9]{4}\.[0-9]{2}\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
-                      sed -i "s|@copyright.*|@copyright Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$PHP_FILE"
+                # Function to update PHP files in a directory
+                update_php_files() {
+                  local SEARCH_DIR="$1"
+                  find "$SEARCH_DIR" -name "*.php" | while read -r PHP_FILE; do
+                    if [ -f "$PHP_FILE" ]; then
+                      if grep -q "@version" "$PHP_FILE"; then
+                        sed -i -E "s|(@version[ ]+).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                        sed -i -E "s|(Version[ ]*:[ ]*).*|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                        sed -i -E "s|(\* Version:)[0-9]{4}\.[0-9]{2}\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$PHP_FILE"
+                        sed -i "s|@copyright.*|@copyright Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$PHP_FILE"
+                      fi
                     fi
-                  fi
-                done
+                  done
+                }
+                
+                # Update PHP files in main directory
+                update_php_files "."
+                
+                # If this is a package, also update PHP files in referenced extensions
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
+                  echo "Package extension detected. Updating PHP files in referenced extensions..."
+                  
+                  # Extract referenced extension directories from the package manifest
+                  REFERENCED_XMLS=$(grep -oP '<file[^>]+>.*?\.xml' "$EXTENSION_XML" | sed 's/.*>\(.*\)/\1/')
+                  
+                  for REF_XML in $REFERENCED_XMLS; do
+                    # Get the directory of the referenced extension
+                    PACKAGE_DIR=$(dirname "$EXTENSION_XML")
+                    if [[ "$REF_XML" == /* ]]; then
+                      REF_DIR=$(dirname "$REF_XML")
+                    else
+                      REF_DIR="$PACKAGE_DIR/$(dirname "$REF_XML")"
+                    fi
+                    
+                    # Normalize the path
+                    if [ -d "$REF_DIR" ]; then
+                      REF_DIR=$(cd "$REF_DIR" 2>/dev/null && pwd)
+                      echo "Updating PHP files in: $REF_DIR"
+                      update_php_files "$REF_DIR"
+                    fi
+                  done
+                fi
 
         -   name: Update language files
             if: inputs.file-updates == 'true'
             shell: bash
             run: |
-                find . -name "*.ini" -o -name "*.sys.ini" | while read -r LANG_FILE; do
-                  if [ -f "$LANG_FILE" ]; then
-                    if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
-                      sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
-                      sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
-                    else
-                      sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
-                      sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                # Function to update language files in a directory
+                update_lang_files() {
+                  local SEARCH_DIR="$1"
+                  find "$SEARCH_DIR" -name "*.ini" -o -name "*.sys.ini" | while read -r LANG_FILE; do
+                    if [ -f "$LANG_FILE" ]; then
+                      if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
+                        sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                        sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                      else
+                        sed -i "s|; Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                        sed -i "s|; Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}|; Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$LANG_FILE"
+                      fi
                     fi
-                  fi
-                done
+                  done
+                }
+                
+                # Update language files in main directory
+                update_lang_files "."
+                
+                # If this is a package, also update language files in referenced extensions
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
+                  echo "Package extension detected. Updating language files in referenced extensions..."
+                  
+                  # Extract referenced extension directories from the package manifest
+                  REFERENCED_XMLS=$(grep -oP '<file[^>]+>.*?\.xml' "$EXTENSION_XML" | sed 's/.*>\(.*\)/\1/')
+                  
+                  for REF_XML in $REFERENCED_XMLS; do
+                    # Get the directory of the referenced extension
+                    PACKAGE_DIR=$(dirname "$EXTENSION_XML")
+                    if [[ "$REF_XML" == /* ]]; then
+                      REF_DIR=$(dirname "$REF_XML")
+                    else
+                      REF_DIR="$PACKAGE_DIR/$(dirname "$REF_XML")"
+                    fi
+                    
+                    # Normalize the path
+                    if [ -d "$REF_DIR" ]; then
+                      REF_DIR=$(cd "$REF_DIR" 2>/dev/null && pwd)
+                      echo "Updating language files in: $REF_DIR"
+                      update_lang_files "$REF_DIR"
+                    fi
+                  done
+                fi
 
         -   name: Update CSS files
             if: inputs.file-updates == 'true'
             shell: bash
             run: |
-                find . -name "*.css" | while read -r CSS_FILE; do
-                  if [ -f "$CSS_FILE" ]; then
-                    if grep -q "Copyright (C)" "$CSS_FILE"; then
-                      if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
-                        sed -i "s|/\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
-                        sed -i "s|/\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
-                        sed -i "s| \* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
-                        sed -i "s| \* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
-                      else
-                        sed -i "s|/\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
-                        sed -i "s|/\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
-                        sed -i "s| \* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
-                        sed -i "s| \* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                # Function to update CSS files in a directory
+                update_css_files() {
+                  local SEARCH_DIR="$1"
+                  find "$SEARCH_DIR" -name "*.css" | while read -r CSS_FILE; do
+                    if [ -f "$CSS_FILE" ]; then
+                      if grep -q "Copyright (C)" "$CSS_FILE"; then
+                        if [ "${{ steps.set_version.outputs.current_year }}" -gt "${{ inputs.copyright-start-year }}" ]; then
+                          sed -i "s|/\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                          sed -i "s|/\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                          sed -i "s| \* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                          sed -i "s| \* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ inputs.copyright-start-year }} - ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                        else
+                          sed -i "s|/\* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                          sed -i "s|/\* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }} \*/|/* Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }} */|g" "$CSS_FILE"
+                          sed -i "s| \* Copyright (C) [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                          sed -i "s| \* Copyright (C) [0-9]\{4\} - [0-9]\{4\} ${{ inputs.copyright-holder }}| * Copyright (C) ${{ steps.set_version.outputs.current_year }} ${{ inputs.copyright-holder }}|g" "$CSS_FILE"
+                        fi
+                      fi
+                  
+                      if grep -q "\* Version:[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}" "$CSS_FILE"; then
+                        sed -i -E "s|(\* Version:)[0-9]{4}\.[0-9]{2}\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$CSS_FILE"
                       fi
                     fi
+                  done
+                }
                 
-                    if grep -q "\* Version:[0-9]\{4\}\.[0-9]\{2\}\.[0-9]\{2\}" "$CSS_FILE"; then
-                      sed -i -E "s|(\* Version:)[0-9]{4}\.[0-9]{2}\.[0-9]{2}|\\1${{ steps.set_version.outputs.version }}|g" "$CSS_FILE"
+                # Update CSS files in main directory
+                update_css_files "."
+                
+                # If this is a package, also update CSS files in referenced extensions
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
+                  echo "Package extension detected. Updating CSS files in referenced extensions..."
+                  
+                  # Extract referenced extension directories from the package manifest
+                  REFERENCED_XMLS=$(grep -oP '<file[^>]+>.*?\.xml' "$EXTENSION_XML" | sed 's/.*>\(.*\)/\1/')
+                  
+                  for REF_XML in $REFERENCED_XMLS; do
+                    # Get the directory of the referenced extension
+                    PACKAGE_DIR=$(dirname "$EXTENSION_XML")
+                    if [[ "$REF_XML" == /* ]]; then
+                      REF_DIR=$(dirname "$REF_XML")
+                    else
+                      REF_DIR="$PACKAGE_DIR/$(dirname "$REF_XML")"
                     fi
-                  fi
-                done
+                    
+                    # Normalize the path
+                    if [ -d "$REF_DIR" ]; then
+                      REF_DIR=$(cd "$REF_DIR" 2>/dev/null && pwd)
+                      echo "Updating CSS files in: $REF_DIR"
+                      update_css_files "$REF_DIR"
+                    fi
+                  done
+                fi
 
         -   name: Generate changelog
             if: inputs.generate-changelog == 'true'
