@@ -325,58 +325,59 @@ runs:
                 if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
                   echo "Package extension detected. Updating referenced extension XML files..."
                   
-                  # Extract referenced files from the package manifest
-                  # Look for <file> tags - they contain the path to the extension XML
-                  # Format can be:
-                  # <file type="module" id="mod_test">mod_test.xml</file>
-                  # <file type="plugin" id="plg_content_test" group="content">plugins/content/test/test.xml</file>
-                  # <file type="component" id="com_test">com_test/com_test.xml</file>
+                  # Extract referenced directories and IDs from the package manifest
+                  # The <file> tags contain directory paths, not XML file paths
+                  # Format:
+                  # <file type="module" id="mod_test">mod_test</file>
+                  # <file type="plugin" group="content" id="plg_content_test">plugins/content/test</file>
+                  # <file type="component" id="com_test">com_test</file>
                   
-                  # Extract the content between <file> tags (the path to XML files)
-                  REFERENCED_FILES=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
-                  
-                  if [ -z "$REFERENCED_FILES" ]; then
-                    echo "No referenced files found in package manifest"
-                  else
-                    for REF_FILE in $REFERENCED_FILES; do
-                      echo "Processing referenced file: $REF_FILE"
+                  # Parse each <file> tag to get the directory and ID
+                  while IFS= read -r line; do
+                    if [[ "$line" =~ \<file[^\>]*id=\"([^\"]+)\"[^\>]*\>([^\<]+)\</file\> ]]; then
+                      EXT_ID="${BASH_REMATCH[1]}"
+                      EXT_DIR="${BASH_REMATCH[2]}"
                       
-                      # The path in the package XML is relative to the package root
-                      if [ -f "$REF_FILE" ]; then
-                        echo "Found and updating: $REF_FILE"
-                        update_xml_file "$REF_FILE"
-                      else
-                        # Try some common variations
-                        # Sometimes the path might not include subdirectories
-                        BASE_NAME=$(basename "$REF_FILE")
-                        EXT_NAME="${BASE_NAME%.xml}"
-                        
-                        # Check common locations
-                        POSSIBLE_LOCATIONS=(
-                          "$REF_FILE"
-                          "$EXT_NAME/$REF_FILE"
-                          "$EXT_NAME/$BASE_NAME"
-                          "plugins/content/$EXT_NAME/$BASE_NAME"
-                          "plugins/system/$EXT_NAME/$BASE_NAME"
-                          "plugins/task/$EXT_NAME/$BASE_NAME"
+                      echo "Processing extension: $EXT_ID in directory: $EXT_DIR"
+                      
+                      # Determine the XML filename based on the ID
+                      # For plugins, the XML might be named differently
+                      if [[ "$EXT_ID" =~ ^plg_ ]]; then
+                        # Plugin XML files are often named after the plugin name without the group
+                        # e.g., plg_task_bears_aichatbot -> bears_aichatbot.xml
+                        PLUGIN_NAME="${EXT_ID#plg_*_}"
+                        # Try both naming conventions
+                        POSSIBLE_XML_NAMES=(
+                          "${EXT_ID}.xml"
+                          "${PLUGIN_NAME}.xml"
+                          "$(basename "$EXT_DIR").xml"
                         )
-                        
-                        FOUND=false
-                        for LOCATION in "${POSSIBLE_LOCATIONS[@]}"; do
-                          if [ -f "$LOCATION" ]; then
-                            echo "Found and updating: $LOCATION"
-                            update_xml_file "$LOCATION"
-                            FOUND=true
-                            break
-                          fi
-                        done
-                        
-                        if [ "$FOUND" = false ]; then
-                          echo "::warning::Could not find XML manifest: $REF_FILE"
-                        fi
+                      else
+                        # For modules and components, the XML is usually named after the ID
+                        POSSIBLE_XML_NAMES=(
+                          "${EXT_ID}.xml"
+                          "$(basename "$EXT_DIR").xml"
+                        )
                       fi
-                    done
-                  fi
+                      
+                      # Try to find the XML file
+                      FOUND=false
+                      for XML_NAME in "${POSSIBLE_XML_NAMES[@]}"; do
+                        XML_PATH="${EXT_DIR}/${XML_NAME}"
+                        if [ -f "$XML_PATH" ]; then
+                          echo "Found and updating: $XML_PATH"
+                          update_xml_file "$XML_PATH"
+                          FOUND=true
+                          break
+                        fi
+                      done
+                      
+                      if [ "$FOUND" = false ]; then
+                        echo "::warning::Could not find XML manifest for $EXT_ID in $EXT_DIR"
+                        echo "Tried: ${POSSIBLE_XML_NAMES[*]}"
+                      fi
+                    fi
+                  done < "$EXTENSION_XML"
                 fi
 
         -   name: Update Joomla update server XML
@@ -442,15 +443,12 @@ runs:
                 if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
                   echo "Package extension detected. Updating PHP files in referenced extensions..."
                   
-                  # Extract the directories containing the referenced XML files
-                  REFERENCED_FILES=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
+                  # Extract the directories from the <file> tags
+                  REFERENCED_DIRS=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
                   
-                  if [ -n "$REFERENCED_FILES" ]; then
-                    for REF_FILE in $REFERENCED_FILES; do
-                      # Get the directory containing the XML file
-                      REF_DIR=$(dirname "$REF_FILE")
-                      
-                      if [ -d "$REF_DIR" ] && [ "$REF_DIR" != "." ]; then
+                  if [ -n "$REFERENCED_DIRS" ]; then
+                    for REF_DIR in $REFERENCED_DIRS; do
+                      if [ -d "$REF_DIR" ]; then
                         echo "Updating PHP files in: $REF_DIR"
                         update_php_files "$REF_DIR"
                       fi
@@ -486,15 +484,12 @@ runs:
                 if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
                   echo "Package extension detected. Updating language files in referenced extensions..."
                   
-                  # Extract the directories containing the referenced XML files
-                  REFERENCED_FILES=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
+                  # Extract the directories from the <file> tags
+                  REFERENCED_DIRS=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
                   
-                  if [ -n "$REFERENCED_FILES" ]; then
-                    for REF_FILE in $REFERENCED_FILES; do
-                      # Get the directory containing the XML file
-                      REF_DIR=$(dirname "$REF_FILE")
-                      
-                      if [ -d "$REF_DIR" ] && [ "$REF_DIR" != "." ]; then
+                  if [ -n "$REFERENCED_DIRS" ]; then
+                    for REF_DIR in $REFERENCED_DIRS; do
+                      if [ -d "$REF_DIR" ]; then
                         echo "Updating language files in: $REF_DIR"
                         update_lang_files "$REF_DIR"
                       fi
@@ -540,15 +535,12 @@ runs:
                 if [ -f "$EXTENSION_XML" ] && grep -q 'type="package"' "$EXTENSION_XML"; then
                   echo "Package extension detected. Updating CSS files in referenced extensions..."
                   
-                  # Extract the directories containing the referenced XML files
-                  REFERENCED_FILES=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
+                  # Extract the directories from the <file> tags
+                  REFERENCED_DIRS=$(grep -oP '<file[^>]*>\K[^<]+(?=</file>)' "$EXTENSION_XML")
                   
-                  if [ -n "$REFERENCED_FILES" ]; then
-                    for REF_FILE in $REFERENCED_FILES; do
-                      # Get the directory containing the XML file
-                      REF_DIR=$(dirname "$REF_FILE")
-                      
-                      if [ -d "$REF_DIR" ] && [ "$REF_DIR" != "." ]; then
+                  if [ -n "$REFERENCED_DIRS" ]; then
+                    for REF_DIR in $REFERENCED_DIRS; do
+                      if [ -d "$REF_DIR" ]; then
                         echo "Updating CSS files in: $REF_DIR"
                         update_css_files "$REF_DIR"
                       fi
