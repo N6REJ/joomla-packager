@@ -166,6 +166,29 @@ The action categorizes commits based on their prefix:
     update-joomla-server: 'true'
 ```
 
+### Package with Multiple Extensions
+
+This example shows how to package a complete Joomla package containing a component, module, and multiple plugins (based on [N6REJ/bears_aichatbot](https://github.com/N6REJ/bears_aichatbot)):
+
+```yaml
+- uses: N6REJ/joomla-packager@v1
+  with:
+    extension-name: 'pkg_bears_aichatbot'
+    extension-xml: 'pkg_bears_aichatbot.xml'
+    extension-type: 'package'
+    author: 'N6REJ'
+    copyright-holder: 'N6REJ'
+    copyright-start-year: '2024'
+    github-token: ${{ secrets.GH_PAT }}
+    file-updates: 'true'  # Updates version in all included extensions
+```
+
+When packaging multiple extensions, the action will:
+- Update the package XML manifest
+- Update all referenced component, module, and plugin XML files
+- Update version and copyright in all PHP, CSS, and language files
+- Maintain consistent versioning across all included extensions
+
 ### Using Manual Version
 
 ```yaml
@@ -221,6 +244,8 @@ This project is open source and available under the GPL3+ License.
 ## 🙏 Credits
 
 Based on the workflow from [N6REJ/mod_bears_pricing_tables](https://github.com/N6REJ/mod_bears_pricing_tables).
+
+Example package implementation: [N6REJ/bears_aichatbot](https://github.com/N6REJ/bears_aichatbot) - A complete Joomla package with component, module, and multiple plugins.
 
 ---
 
