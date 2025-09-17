@@ -310,6 +310,9 @@ runs:
                       fi
                     fi
                     
+                    # Remove backup file
+                    rm -f "${XML_FILE}.bak"
+                    
                     echo "Updated $XML_FILE with version $VERSION"
                     echo "Version line in XML:"
                     grep "<version>" "$XML_FILE" || echo "No version tag found"
@@ -410,6 +413,8 @@ runs:
                   sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
                   # Update download URL
                   sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
+                  # Remove backup file
+                  rm -f "${UPDATES_XML}.bak"
                   echo "Updated $UPDATES_XML file with new version and download URL"
                   cat "$UPDATES_XML"
                 else
@@ -616,6 +621,18 @@ runs:
                 echo -e "$CHANGELOG_OUTPUT" >> $GITHUB_OUTPUT
                 echo "EOF" >> $GITHUB_OUTPUT
 
+        -   name: Cleanup repo files
+            if: always()
+            shell: bash
+            run: |
+                # Remove all .bak files recursively
+                find . -name "*.bak" -type f -delete
+                
+                # Remove directory structure file if it exists
+                rm -f directory-structure.txt
+                
+                echo "Removed all backup files and temporary files from repository"
+
         -   name: Create package
             id: create_package
             shell: bash
@@ -728,46 +745,3 @@ runs:
                 gh release create "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --title "$RELEASE_NAME" --notes "Automated release by workflow" || gh release upload "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --clobber
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
-
-        -   name: Update Joomla update server XML
-            if: inputs.update-joomla-server == 'true'
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                UPDATES_XML="${{ inputs.updates-xml-file }}"
-                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                # If updates.xml does not exist, create a minimal valid structure
-                if [ ! -f "$UPDATES_XML" ]; then
-                  echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
-                  echo '<updates>' >> "$UPDATES_XML"
-                  echo '  <update>' >> "$UPDATES_XML"
-                  echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
-                  echo '    <description />' >> "$UPDATES_XML"
-                  echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
-                  echo '    <type />' >> "$UPDATES_XML"
-                  echo '    <version>${{ steps.set_version.outputs.version }}</version>' >> "$UPDATES_XML"
-                  echo '    <infourl />' >> "$UPDATES_XML"
-                  echo '    <downloads>' >> "$UPDATES_XML"
-                  echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
-                  echo '    </downloads>' >> "$UPDATES_XML"
-                  echo '  </update>' >> "$UPDATES_XML"
-                  echo '</updates>' >> "$UPDATES_XML"
-                fi
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                  # Update version
-                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                  # Update download URL
-                  sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
-                else
-                  echo "::warning::${{ inputs.updates-xml-file }} file could not be created."
-                fi
-
-        -   name: Cleanup repo files
-            if: always()
-            shell: bash
-            run: |
-                rm -f directory-structure.txt updates.xml.bak *.xml.bak
-                echo "Removed directory-structure.txt and XML backup files from repo root if present."
