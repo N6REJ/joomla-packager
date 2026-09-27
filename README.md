@@ -73,7 +73,32 @@ jobs:
 
 ### Optional Inputs
 
-See the [action README](.github/actions/joomla-packager/README.md) for all available options.
+| Input | Default | Description |
+|-------|---------|-------------|
+| `manual-version` | `''` | Explicit version, overrides every scheme |
+| `version-scheme` | `date` | `date` → `2025.10.02.3`, or `semver` → bumps the patch of the manifest `<version>` when that version was already released |
+| `create-release` | `true` | Create the GitHub release and upload the package |
+| `update-joomla-server` | `true` | Publish `updates.xml` **after** the release asset is verified (requires `create-release`) |
+| `commit-changes` | `false` | Commit and push the manifest, `updates.xml` and changelog back to the branch |
+| `updates-xml-file` | `updates.xml` | Update feed file name |
+| `changelog-file` | `CHANGELOG.md` | Generated changelog file name |
+| `license-file` | `License.txt` | License file name |
+| `file-updates` | `true` | Rewrite version/date/copyright in manifest, PHP, INI and CSS files |
+| `generate-changelog` | `true` | Generate a changelog from the commits since the previous tag |
+| `upload-artifact` | `true` | Also upload the unpacked package as a workflow artifact |
+| `readme` | `false` | Include `README.md` in the package ZIP |
+| `php-version` | `8.1` | PHP version used for the packaging steps |
+| `dir-tree-file` | `directory-structure.txt` | Directory listing generated for the release, empty to skip |
+
+> **Note:** `helper-file`, `favicon-file`, `package-dir`, `css-dir`, `js-dir`, `tmpl-dir` and `language-dir` are accepted for backwards compatibility but are not currently used by the action.
+
+### Releases and the update feed
+
+The action is careful about *when* a version becomes public:
+
+- **The feed is published last.** `updates.xml` is only rewritten after the release has been created, and only once the release asset has been confirmed to exist. A failed release therefore never leaves installed sites being offered a download that 404s.
+- **Re-runs are idempotent.** If the computed version is already tagged **and that tag points at the current commit**, the release steps are skipped instead of minting a duplicate version.
+- **Nothing is left behind.** The action updates files in the workspace only. Set `commit-changes: 'true'` to have it commit and push the version bump, the feed and the changelog back to your branch — otherwise your workflow must do that itself, and a diff check that ignores untracked files will silently drop the feed update.
 
 ## 🔑 Token Permissions
 
@@ -202,6 +227,22 @@ When packaging multiple extensions, the action will:
     copyright-start-year: '2024'
     github-token: ${{ secrets.GH_PAT }}
     manual-version: '2.0.0'  # Specify your own version
+```
+
+### Using Semantic Versioning
+
+```yaml
+- uses: N6REJ/joomla-packager@main
+  with:
+    extension-name: 'mod_example'
+    extension-xml: 'mod_example.xml'
+    extension-type: 'module'
+    author: 'Your Name'
+    copyright-holder: 'Your Company'
+    copyright-start-year: '2024'
+    github-token: ${{ secrets.GH_PAT }}
+    version-scheme: 'semver'   # uses the manifest <version>, bumping the patch if already released
+    commit-changes: 'true'     # push the version bump and update feed back to main
 ```
 
 ## 🔄 Extending the Action

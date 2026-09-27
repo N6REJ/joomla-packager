@@ -43,6 +43,10 @@ inputs:
         description: 'Manual version override (e.g. 1.2.3). If not specified, uses automatic date-based versioning'
         required: false
         default: ''
+    version-scheme:
+        description: "Version numbering when manual-version is empty: 'date' (default, e.g. 2025.10.02.3) or 'semver' (bump from the manifest <version>)"
+        required: false
+        default: 'date'
 
     # PHP configuration
     php-version:
@@ -116,9 +120,13 @@ inputs:
         required: false
         default: 'true'
     update-joomla-server:
-        description: 'Whether to update Joomla update server XML'
+        description: 'Whether to publish the Joomla update server XML. Requires create-release to be true, and the release asset is verified before the feed is updated'
         required: false
         default: 'true'
+    commit-changes:
+        description: 'Commit and push the updated files (manifest, updates.xml, changelog) back to the branch. Recommended so the update feed is never left stale'
+        required: false
+        default: 'false'
     readme:
         description: 'Include README.md in the package (true/false)'
         required: false
@@ -256,11 +264,37 @@ runs:
                 if [ -n "${{ inputs.manual-version }}" ]; then
                   VERSION="${{ inputs.manual-version }}"
                   echo "Using manual version: $VERSION"
+                elif [ "${{ inputs.version-scheme }}" = "semver" ]; then
+                  # Use semantic versioning based on the manifest <version>
+                  EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                  git fetch --tags
+                  MANIFEST_VERSION=""
+                  if [ -f "$EXTENSION_XML" ]; then
+                    MANIFEST_VERSION=$(sed -n "s|.*<version>\(.*\)</version>.*|\1|p" "$EXTENSION_XML" | head -1 | tr -d '[:space:]')
+                  fi
+                  if [ -z "$MANIFEST_VERSION" ]; then
+                    echo "::error::version-scheme 'semver' requires a <version> element in $EXTENSION_XML"
+                    exit 1
+                  fi
+                  if git rev-parse -q --verify "refs/tags/${MANIFEST_VERSION}" >/dev/null 2>&1; then
+                    # Manifest version was already released, bump the patch level
+                    MAJOR=$(echo "$MANIFEST_VERSION" | cut -d. -f1)
+                    MINOR=$(echo "$MANIFEST_VERSION" | cut -d. -f2)
+                    PATCH=$(echo "$MANIFEST_VERSION" | cut -d. -f3)
+                    if [ -z "$PATCH" ]; then
+                      PATCH=0
+                    fi
+                    VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+                    echo "Manifest version ${MANIFEST_VERSION} was already released, bumped to: $VERSION"
+                  else
+                    VERSION="$MANIFEST_VERSION"
+                    echo "Using manifest version: $VERSION"
+                  fi
                 else
                   # Use automatic date-based versioning
                   BASE_VERSION=$(date +'%Y.%m.%d')
                   git fetch --tags
-                  if git rev-parse "$BASE_VERSION" >/dev/null 2>&1; then
+                  if git rev-parse -q --verify "refs/tags/${BASE_VERSION}" >/dev/null 2>&1; then
                     MATCHING_TAGS=$(git tag -l "$BASE_VERSION.*")
                     if [ -z "$MATCHING_TAGS" ]; then
                       VERSION="${BASE_VERSION}.1"
@@ -279,6 +313,25 @@ runs:
                 echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
                 echo "current_year=$CURRENT_YEAR" >> $GITHUB_OUTPUT
 
+        -   name: Check for existing release
+            id: release_state
+            shell: bash
+            run: |
+                VERSION="${{ steps.set_version.outputs.version }}"
+                git fetch --tags
+                if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
+                    TAG_COMMIT=$(git rev-list -n 1 "${VERSION}" 2>/dev/null || echo "")
+                    HEAD_COMMIT=$(git rev-parse HEAD)
+                    if [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
+                        echo "exists=true" >> $GITHUB_OUTPUT
+                        echo "::notice::Release ${VERSION} already points at this commit, skipping duplicate release creation"
+                    else
+                        echo "exists=false" >> $GITHUB_OUTPUT
+                        echo "::warning::Tag ${VERSION} exists but points at a different commit (${TAG_COMMIT:0:7})"
+                    fi
+                else
+                    echo "exists=false" >> $GITHUB_OUTPUT
+                fi
         -   name: Update extension XML manifest
             if: inputs.file-updates == 'true'
             shell: bash
@@ -381,44 +434,6 @@ runs:
                       fi
                     fi
                   done < "$EXTENSION_XML"
-                fi
-
-        -   name: Update Joomla update server XML
-            if: inputs.update-joomla-server == 'true'
-            shell: bash
-            run: |
-                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
-                UPDATES_XML="${{ inputs.updates-xml-file }}"
-                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.set_version.outputs.version }}/${EXTENSION_NAME}_${{ steps.set_version.outputs.version }}.zip"
-                # If updates.xml does not exist, create a minimal valid structure
-                if [ ! -f "$UPDATES_XML" ]; then
-                  echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
-                  echo '<updates>' >> "$UPDATES_XML"
-                  echo '  <update>' >> "$UPDATES_XML"
-                  echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
-                  echo '    <description />' >> "$UPDATES_XML"
-                  echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
-                  echo '    <type />' >> "$UPDATES_XML"
-                  echo '    <version>${{ steps.set_version.outputs.version }}</version>' >> "$UPDATES_XML"
-                  echo '    <infourl />' >> "$UPDATES_XML"
-                  echo '    <downloads>' >> "$UPDATES_XML"
-                  echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
-                  echo '    </downloads>' >> "$UPDATES_XML"
-                  echo '  </update>' >> "$UPDATES_XML"
-                  echo '</updates>' >> "$UPDATES_XML"
-                fi
-                if [ -f "$UPDATES_XML" ]; then
-                  cp "$UPDATES_XML" "${UPDATES_XML}.bak"
-                  # Update version
-                  sed -i "s|<version>.*</version>|<version>${{ steps.set_version.outputs.version }}</version>|g" "$UPDATES_XML"
-                  # Update download URL
-                  sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">$DOWNLOAD_URL</downloadurl>|g" "$UPDATES_XML"
-                  # Remove backup file
-                  rm -f "${UPDATES_XML}.bak"
-                  echo "Updated $UPDATES_XML file with new version and download URL"
-                  cat "$UPDATES_XML"
-                else
-                  echo "::warning::${{ inputs.updates-xml-file }} file could not be created."
                 fi
 
         -   name: Update PHP files
@@ -715,7 +730,7 @@ runs:
                 echo "DEBUG: set_version.outputs.version is ${{ steps.set_version.outputs.version }}"
 
         -   name: Create release zip for GitHub Release
-            if: inputs.create-release == 'true'
+            if: inputs.create-release == 'true' && steps.release_state.outputs.exists != 'true'
             shell: bash
             run: |
                 EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
@@ -732,7 +747,8 @@ runs:
                 echo "ZIP_PATH=$ZIP_PATH" >> $GITHUB_ENV
 
         -   name: Create GitHub Release
-            if: inputs.create-release == 'true'
+            id: create_release
+            if: inputs.create-release == 'true' && steps.release_state.outputs.exists != 'true'
             shell: bash
             run: |
                 TAG_NAME="${{ steps.set_version.outputs.version }}"
@@ -743,5 +759,91 @@ runs:
                 echo "ZIP: $ZIP_PATH"
                 echo "DIR TREE: ${{ steps.create_package.outputs.dir_tree_path }}"
                 gh release create "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --title "$RELEASE_NAME" --notes "Automated release by workflow" || gh release upload "$TAG_NAME" "$ZIP_PATH" "${{ steps.create_package.outputs.dir_tree_path }}" --clobber
+                RELEASE_URL=$(gh release view "$TAG_NAME" --json url --jq .url 2>/dev/null || echo "")
+                echo "url=$RELEASE_URL" >> $GITHUB_OUTPUT
+                echo "Release URL: $RELEASE_URL"
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
+
+        -   name: Publish Joomla update feed
+            if: inputs.update-joomla-server == 'true' && inputs.create-release == 'true'
+            shell: bash
+            run: |
+                set -euo pipefail
+                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                UPDATES_XML="${{ inputs.updates-xml-file }}"
+                VERSION="${{ steps.set_version.outputs.version }}"
+                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
+                ASSET_NAME="${EXTENSION_NAME}_${VERSION}.zip"
+
+                # Never advertise a version that cannot actually be downloaded,
+                # otherwise installed sites are offered a package that 404s.
+                echo "Verifying release asset ${ASSET_NAME} exists..."
+                for attempt in 1 2 3 4 5 6 7 8 9 10; do
+                    if gh release view "$VERSION" --json assets --jq ".assets[].name" 2>/dev/null | grep -Fxq "$ASSET_NAME"; then
+                        echo "Release asset confirmed: $ASSET_NAME"
+                        break
+                    fi
+                    if [ "$attempt" -eq 10 ]; then
+                        echo "::error::Release asset ${ASSET_NAME} for ${VERSION} not found, update feed NOT published"
+                        exit 1
+                    fi
+                    sleep 5
+                done
+
+                # If updates.xml does not exist, create a minimal valid structure
+                if [ ! -f "$UPDATES_XML" ]; then
+                    echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
+                    echo '<updates>' >> "$UPDATES_XML"
+                    echo '  <update>' >> "$UPDATES_XML"
+                    echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
+                    echo '    <description />' >> "$UPDATES_XML"
+                    echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
+                    echo '    <type />' >> "$UPDATES_XML"
+                    echo "    <version>${VERSION}</version>" >> "$UPDATES_XML"
+                    echo '    <infourl />' >> "$UPDATES_XML"
+                    echo '    <downloads>' >> "$UPDATES_XML"
+                    echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
+                    echo '    </downloads>' >> "$UPDATES_XML"
+                    echo '  </update>' >> "$UPDATES_XML"
+                    echo '</updates>' >> "$UPDATES_XML"
+                fi
+
+                # Update version
+                sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
+                # Update download URL
+                sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">${DOWNLOAD_URL}</downloadurl>|g" "$UPDATES_XML"
+                echo "Updated $UPDATES_XML file with new version and download URL"
+                cat "$UPDATES_XML"
+            env:
+                GITHUB_TOKEN: ${{ inputs.github-token }}
+
+        -   name: Commit updated files
+            if: inputs.commit-changes == 'true'
+            shell: bash
+            run: |
+                set -euo pipefail
+                VERSION="${{ steps.set_version.outputs.version }}"
+
+                # Resolve the branch to push to across workflow_dispatch and
+                # merged pull_request triggers
+                BRANCH="${{ github.event.pull_request.base.ref }}"
+                if [ -z "$BRANCH" ]; then
+                    BRANCH="${{ github.event.ref_name }}"
+                fi
+                if [ -z "$BRANCH" ]; then
+                    BRANCH="${{ github.event.repository.default_branch }}"
+                fi
+
+                git config --global user.name "GitHub Actions"
+                git config --global user.email "actions@github.com"
+
+                # -A so newly generated files such as CHANGELOG.md are included
+                git add -A
+                if git diff --cached --quiet; then
+                    echo "No changes to commit"
+                else
+                    git commit -m "Update version to ${VERSION} [skip ci]"
+                    git push origin "HEAD:${BRANCH}"
+                    echo "Pushed version ${VERSION} to ${BRANCH}"
+                fi
