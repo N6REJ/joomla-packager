@@ -1,0 +1,103 @@
+name: Test Module Action
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run Joomla Packager Action (Module)
+        id: package
+        uses: N6REJ/joomla-packager@2026.9.28
+        with:
+          extension-name: 'mod_test'
+          extension-xml: 'test-extensions/test-module/mod_test.xml'
+          extension-type: 'module'
+          # The action defaults to ./updates.xml, which does not exist in this
+          # repository, so point it at the test module's own feed. Without this the
+          # feed path is skipped entirely and never exercised.
+          updates-xml-file: 'test-extensions/test-module/updates.xml'
+          github-token: ${{ github.token }}
+          # This repository is the packager itself, not an extension, so the
+          # package is a copy of the whole tree. Publish nothing: the point of
+          # this test is to assert on the rewritten files, and a release here
+          # would just be noise on the packager's own releases page.
+          create-release: 'false'
+          update-joomla-server: 'false'
+          commit-changes: 'false'
+          dir-tree-file: ''
+      - name: Verify the packaged feed matches the manifest
+        shell: bash
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE_PATH: ${{ steps.package.outputs.package-path }}
+        run: |
+          set -euo pipefail
+
+          MANIFEST='test-extensions/test-module/mod_test.xml'
+          FEED='test-extensions/test-module/updates.xml'
+
+          read_tag() {
+            sed -n 's|.*<'"$2"'>\([^<]*\)</'"$2"'>.*|\1|p' "$1" | head -1
+          }
+
+          if [ -z "${VERSION}" ]; then
+            echo "::error::The action reported no version"
+            exit 1
+          fi
+          echo "action version : ${VERSION}"
+
+          MANIFEST_VERSION=$(read_tag "$MANIFEST" version)
+          FEED_VERSION=$(read_tag "$FEED" version)
+          FEED_URL=$(sed -n 's|.*<downloadurl[^>]*>\([^<]*\)</downloadurl>.*|\1|p' "$FEED" | head -1)
+
+          echo "manifest version: ${MANIFEST_VERSION}"
+          echo "feed version    : ${FEED_VERSION}"
+          echo "feed url        : ${FEED_URL}"
+
+          FAIL=0
+          if [ "$MANIFEST_VERSION" != "$VERSION" ]; then
+            echo "::error::Manifest says ${MANIFEST_VERSION} but the action reported ${VERSION}"
+            FAIL=1
+          fi
+          if [ "$FEED_VERSION" != "$VERSION" ]; then
+            echo "::error::Feed advertises ${FEED_VERSION} but the action reported ${VERSION}"
+            FAIL=1
+          fi
+          case "$FEED_URL" in
+            *"/releases/download/${VERSION}/"*) ;;
+            *)
+              echo "::error::Feed URL does not point at ${VERSION}: ${FEED_URL}"
+              FAIL=1
+              ;;
+          esac
+
+          # The feed is synced before packaging, so the copy inside the package
+          # must already be current. This is the regression that shipped once:
+          # the package was assembled before the feed was rewritten, so every
+          # release carried the previous version.
+          if [ -n "$PACKAGE_PATH" ]; then
+            PACKAGED_FEED="${PACKAGE_PATH}/${FEED}"
+            if [ ! -f "$PACKAGED_FEED" ]; then
+              echo "::error::Packaged feed missing at ${PACKAGED_FEED}"
+              FAIL=1
+            else
+              PACKAGED_VERSION=$(read_tag "$PACKAGED_FEED" version)
+              echo "packaged version: ${PACKAGED_VERSION}"
+              if [ "$PACKAGED_VERSION" != "$VERSION" ]; then
+                echo "::error::Packaged feed advertises ${PACKAGED_VERSION}, expected ${VERSION}"
+                FAIL=1
+              fi
+            fi
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::Feed/manifest parity check failed"
+          fi
+          exit "$FAIL"
