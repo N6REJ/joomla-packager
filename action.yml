@@ -261,15 +261,12 @@ runs:
             id: set_version
             shell: bash
             run: |
-                CREATION_DATE=$(TZ="$TIMEZONE" date +'%Y %B %d')
-                CURRENT_YEAR=$(TZ="$TIMEZONE" date +'%Y')
-                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
-                CHANGELOG_FILE="${{ inputs.changelog-file }}"
                 TIMEZONE="${{ inputs.timezone }}"
 
                 # Release dates must reflect the maintainer's day, not the
                 # runner's. GitHub runners are UTC, so an evening build in the
-                # US would be stamped with tomorrow's date.
+                # US would be stamped with tomorrow's date. Validate before the
+                # first use: an unset TZ is not an error, it silently means UTC.
                 if ! printf '%s' "$TIMEZONE" | grep -Eq '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$'; then
                     echo "::error::timezone must be an IANA zone name such as America/Chicago, got: ${TIMEZONE}"
                     exit 1
@@ -278,6 +275,11 @@ runs:
                     echo "::error::timezone '${TIMEZONE}' is not a recognised time zone"
                     exit 1
                 fi
+
+                CREATION_DATE=$(TZ="$TIMEZONE" date +'%Y %B %d')
+                CURRENT_YEAR=$(TZ="$TIMEZONE" date +'%Y')
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                CHANGELOG_FILE="${{ inputs.changelog-file }}"
 
                 # Fingerprint of the files that actually ship in the package.
                 #
