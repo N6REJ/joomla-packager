@@ -88,7 +88,7 @@ jobs:
 | `upload-artifact` | `true` | Also upload the unpacked package as a workflow artifact |
 | `readme` | `false` | Include `README.md` in the package ZIP |
 | `php-version` | `8.1` | PHP version used for the packaging steps |
-| `dir-tree-file` | `directory-structure.txt` | Directory listing generated for the release, empty to skip |
+| `dir-tree-file` | `directory-structure.txt` | Directory listing attached to the release, empty to skip. Not included in the installable package |
 
 > **Note:** `helper-file`, `favicon-file`, `package-dir`, `css-dir`, `js-dir`, `tmpl-dir` and `language-dir` are accepted for backwards compatibility but are not currently used by the action.
 
@@ -97,8 +97,9 @@ jobs:
 The action is careful about *when* a version becomes public:
 
 - **The feed is published last.** `updates.xml` is only rewritten after the release has been created, and only once the release asset has been confirmed to exist. A failed release therefore never leaves installed sites being offered a download that 404s.
-- **Re-runs are idempotent.** If the computed version is already tagged **and that tag points at the current commit**, the release steps are skipped instead of minting a duplicate version.
-- **Nothing is left behind.** The action updates files in the workspace only. Set `commit-changes: 'true'` to have it commit and push the version bump, the feed and the changelog back to your branch — otherwise your workflow must do that itself, and a diff check that ignores untracked files will silently drop the feed update.
+- **Re-runs do not mint empty versions.** Before choosing a version, the action fingerprints the files that actually ship and compares that against the most recent release. If nothing has changed, that version is reused and the release steps are skipped — a re-run, a manual dispatch or a retried job cannot push an identical package onto every installed site as an "update available". The fingerprint deliberately ignores what the action itself regenerates (`CHANGELOG.md`, `updates.xml`) and the manifest's own `<version>`, `<creationDate>` and `<copyright>`, and any change to a `@version`/`@copyright` header in a PHP, CSS or language file. A real source change, including a new parameter in the manifest, still produces a new version.
+- **Nothing is left behind.** The action updates files in the workspace only. Set `commit-changes: 'true'` to have it commit and push the version bump, the feed and the changelog back to your branch — otherwise your workflow must do that itself, and a diff check that ignores untracked files will silently drop the feed update. When a version is reused, the changelog is not regenerated and nothing is committed, so the branch stays untouched.
+- **Only release metadata is generated.** `dir-tree-file` is written next to the build directory and attached to the release, not inside the installable package, so it never ends up on the end user's server.
 
 ## 🔑 Token Permissions
 

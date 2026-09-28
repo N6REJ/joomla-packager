@@ -259,7 +259,60 @@ runs:
             run: |
                 CREATION_DATE=$(date +'%Y %B %d')
                 CURRENT_YEAR=$(date +'%Y')
-                
+                EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
+                CHANGELOG_FILE="${{ inputs.changelog-file }}"
+
+                # Fingerprint of the files that actually ship in the package.
+                #
+                # The action rewrites the version and copyright on every run and
+                # regenerates the changelog, so a release commit always differs
+                # from the tag it was cut from. Comparing commits therefore
+                # cannot tell a genuine change from a re-run, and every re-run
+                # would mint a new version that installed sites then offer as an
+                # update. Hashing the shipped content instead, with the
+                # packager-managed lines removed, makes the comparison
+                # meaningful: an unchanged tree reuses the version that is
+                # already released.
+                content_signature() {
+                  local REV="$1"
+                  local MANIFEST_SHA=""
+                  local ENTRIES=""
+                  local NORMALISED=""
+                  if git cat-file -e "$REV:$EXTENSION_XML" 2>/dev/null; then
+                    MANIFEST_SHA=$(git show "$REV:$EXTENSION_XML" 2>/dev/null \
+                      | sed -E '/<(version|creationDate|copyright)>/d' \
+                      | sha256sum | cut -d' ' -f1)
+                  fi
+                  # For every other file hash the blob as committed. Deliberately
+                  # do not check out the revision: this has to run before the
+                  # manifest, changelog and feed rewriters have touched the
+                  # working tree, or the comparison would always differ.
+                  ENTRIES=$(git ls-tree -r "$REV" \
+                    | grep -v -E "	(${CHANGELOG_FILE}|updates\.xml)$")
+                  if [ -z "$ENTRIES" ]; then
+                    echo "::error::Could not read the tree for ${REV} while fingerprinting the package"
+                    return 1
+                  fi
+                  NORMALISED=$(printf '%s\n' "$ENTRIES" \
+                    | sed -E "s#^([0-9]+ blob )[0-9a-f]+\t${EXTENSION_XML}\$#\1${MANIFEST_SHA}\t${EXTENSION_XML}#" \
+                    | sha256sum | cut -d' ' -f1)
+                  echo "$NORMALISED"
+                }
+
+                LAST_RELEASED_TAG=""
+                RELEASED_CONTENT_SIG=""
+                for TAG in $(git tag -l --sort=-v:refname); do
+                  RELEASED_CONTENT_SIG=$(content_signature "$TAG")
+                  if [ -n "$RELEASED_CONTENT_SIG" ]; then
+                    LAST_RELEASED_TAG="$TAG"
+                    break
+                  fi
+                done
+                if ! CURRENT_CONTENT_SIG=$(content_signature "HEAD"); then
+                    echo "::error::Could not fingerprint the working tree, aborting rather than guessing a version"
+                    exit 1
+                fi
+
                 # Check if manual version is provided
                 if [ -n "${{ inputs.manual-version }}" ]; then
                   VERSION="${{ inputs.manual-version }}"
@@ -276,7 +329,13 @@ runs:
                     echo "::error::version-scheme 'semver' requires a <version> element in $EXTENSION_XML"
                     exit 1
                   fi
-                  if git rev-parse -q --verify "refs/tags/${MANIFEST_VERSION}" >/dev/null 2>&1; then
+                  if [ -n "$LAST_RELEASED_TAG" ] && [ "$CURRENT_CONTENT_SIG" = "$RELEASED_CONTENT_SIG" ]; then
+                    # Nothing shipped since the last release, so reissue that
+                    # version rather than bumping installed sites onto an
+                    # identical package.
+                    VERSION="$LAST_RELEASED_TAG"
+                    echo "Content is unchanged since release ${LAST_RELEASED_TAG}, reusing that version"
+                  elif git rev-parse -q --verify "refs/tags/${MANIFEST_VERSION}" >/dev/null 2>&1; then
                     # Manifest version was already released, bump the patch level
                     MAJOR=$(echo "$MANIFEST_VERSION" | cut -d. -f1)
                     MINOR=$(echo "$MANIFEST_VERSION" | cut -d. -f2)
@@ -294,7 +353,10 @@ runs:
                   # Use automatic date-based versioning
                   BASE_VERSION=$(date +'%Y.%m.%d')
                   git fetch --tags
-                  if git rev-parse -q --verify "refs/tags/${BASE_VERSION}" >/dev/null 2>&1; then
+                  if [ -n "$LAST_RELEASED_TAG" ] && [ "$CURRENT_CONTENT_SIG" = "$RELEASED_CONTENT_SIG" ]; then
+                    VERSION="$LAST_RELEASED_TAG"
+                    echo "Content is unchanged since release ${LAST_RELEASED_TAG}, reusing that version"
+                  elif git rev-parse -q --verify "refs/tags/${BASE_VERSION}" >/dev/null 2>&1; then
                     MATCHING_TAGS=$(git tag -l "$BASE_VERSION.*")
                     if [ -z "$MATCHING_TAGS" ]; then
                       VERSION="${BASE_VERSION}.1"
@@ -312,6 +374,14 @@ runs:
                 echo "version=$VERSION" >> $GITHUB_OUTPUT
                 echo "creation_date=$CREATION_DATE" >> $GITHUB_OUTPUT
                 echo "current_year=$CURRENT_YEAR" >> $GITHUB_OUTPUT
+                # True only when the version we ended up with is one that is
+                # already released against identical content. A manual-version
+                # override is an explicit request, so it never counts as reuse.
+                if [ -n "$LAST_RELEASED_TAG" ] && [ "$CURRENT_CONTENT_SIG" = "$RELEASED_CONTENT_SIG" ] && [ "$VERSION" = "$LAST_RELEASED_TAG" ]; then
+                    echo "content_unchanged=true" >> $GITHUB_OUTPUT
+                else
+                    echo "content_unchanged=false" >> $GITHUB_OUTPUT
+                fi
 
         -   name: Check for existing release
             id: release_state
@@ -319,19 +389,19 @@ runs:
             run: |
                 VERSION="${{ steps.set_version.outputs.version }}"
                 git fetch --tags
-                if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
-                    TAG_COMMIT=$(git rev-list -n 1 "${VERSION}" 2>/dev/null || echo "")
-                    HEAD_COMMIT=$(git rev-parse HEAD)
-                    if [ "$TAG_COMMIT" = "$HEAD_COMMIT" ]; then
-                        echo "exists=true" >> $GITHUB_OUTPUT
-                        echo "::notice::Release ${VERSION} already points at this commit, skipping duplicate release creation"
-                    else
-                        echo "exists=false" >> $GITHUB_OUTPUT
-                        echo "::warning::Tag ${VERSION} exists but points at a different commit (${TAG_COMMIT:0:7})"
-                    fi
+                # Safety net for manual-version and semver schemes, which can
+                # name an already released version. The date scheme resolves
+                # this earlier by comparing content; reuse that decision.
+                if [ "${{ steps.set_version.outputs.content_unchanged }}" = "true" ]; then
+                    echo "exists=true" >> $GITHUB_OUTPUT
+                    echo "::notice::Version ${VERSION} is already released and the package content is unchanged, reusing it"
+                elif git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null 2>&1; then
+                    echo "exists=true" >> $GITHUB_OUTPUT
+                    echo "::warning::Tag ${VERSION} already exists and its content matches this commit, reusing it"
                 else
                     echo "exists=false" >> $GITHUB_OUTPUT
                 fi
+
         -   name: Update extension XML manifest
             if: inputs.file-updates == 'true'
             shell: bash
@@ -569,7 +639,7 @@ runs:
                 fi
 
         -   name: Generate changelog
-            if: inputs.generate-changelog == 'true'
+            if: inputs.generate-changelog == 'true' && steps.release_state.outputs.exists != 'true'
             id: changelog
             shell: bash
             run: |
@@ -689,15 +759,18 @@ runs:
                 
                 rsync -a ./ "$OUTER_BUILD_DIR/" "${EXCLUDES[@]}"
 
-                # Generate directory tree from OUTER_BUILD_DIR
+                # Generate directory tree from OUTER_BUILD_DIR.
+                # It is written next to, not inside, the build directory: it is a
+                # release listing, and anything in OUTER_BUILD_DIR is zipped and
+                # installed on the end user's server.
                 if [ -n "${{ inputs.dir-tree-file }}" ]; then
-                  DIR_TREE_PATH="$OUTER_BUILD_DIR/${{ inputs.dir-tree-file }}"
-                  if command -v tree &> /dev/null; then
-                    (cd "$OUTER_BUILD_DIR" && tree -a -F . | sed '1s|^\./\?$|/|') > "$DIR_TREE_PATH"
-                  else
-                    find "$OUTER_BUILD_DIR" -type f | sed "s|^$OUTER_BUILD_DIR|/|" | sort > "$DIR_TREE_PATH"
-                  fi
-                  echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
+                    DIR_TREE_PATH="$(dirname "$OUTER_BUILD_DIR")/${{ inputs.dir-tree-file }}"
+                    if command -v tree &> /dev/null; then
+                        (cd "$OUTER_BUILD_DIR" && tree -a -F . | sed '1s|^\./\?$|/|') > "$DIR_TREE_PATH"
+                    else
+                        find "$OUTER_BUILD_DIR" -type f | sed "s|^$OUTER_BUILD_DIR|/|" | sort > "$DIR_TREE_PATH"
+                    fi
+                    echo "dir_tree_path=$DIR_TREE_PATH" >> $GITHUB_OUTPUT
                 fi
 
                 echo "Contents of OUTER_BUILD_DIR before artifact upload:"
@@ -766,7 +839,7 @@ runs:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
         -   name: Publish Joomla update feed
-            if: inputs.update-joomla-server == 'true' && inputs.create-release == 'true'
+            if: inputs.update-joomla-server == 'true' && inputs.create-release == 'true' && steps.release_state.outputs.exists != 'true'
             shell: bash
             run: |
                 set -euo pipefail
@@ -819,7 +892,7 @@ runs:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
         -   name: Commit updated files
-            if: inputs.commit-changes == 'true'
+            if: inputs.commit-changes == 'true' && steps.release_state.outputs.exists != 'true'
             shell: bash
             run: |
                 set -euo pipefail
