@@ -277,7 +277,6 @@ runs:
                   local REV="$1"
                   local MANIFEST_SHA=""
                   local ENTRIES=""
-                  local NORMALISED=""
                   if git cat-file -e "$REV:$EXTENSION_XML" 2>/dev/null; then
                     MANIFEST_SHA=$(git show "$REV:$EXTENSION_XML" 2>/dev/null \
                       | sed -E '/<(version|creationDate|copyright)>/d' \
@@ -287,16 +286,40 @@ runs:
                   # do not check out the revision: this has to run before the
                   # manifest, changelog and feed rewriters have touched the
                   # working tree, or the comparison would always differ.
-                  ENTRIES=$(git ls-tree -r "$REV" \
-                    | grep -v -E "	(${CHANGELOG_FILE}|updates\.xml)$")
+                  #
+                  # The exclusions mirror the packaging step, so this fingerprints
+                  # what a user actually installs. Without that, re-pinning this
+                  # action or editing a CI file would look like a shipped change
+                  # and push a pointless new version onto every installed site.
+                  ENTRIES=$(git ls-tree -r "$REV" | awk -v changelog="$CHANGELOG_FILE" -v manifest="$EXTENSION_XML" '
+                    BEGIN {
+                      split(".git .github node_modules build package", d, " ")
+                      for (i in d) dirs[d[i]] = 1
+                    }
+                    {
+                      path = $0
+                      sub(/^[^\t]*\t/, "", path)
+                      n = split(path, part, "/")
+                      skip = 0
+                      for (i = 1; i <= n; i++) {
+                        if (part[i] in dirs) skip = 1
+                      }
+                      base = part[n]
+                      if (base == changelog || base == "updates.xml" ||
+                          base == "README.md" || base == ".gitignore" ||
+                          base == ".packagerignore" || base == ".DS_Store" ||
+                          base == "Thumbs.db" || base ~ /\.(bak|zip)$/) skip = 1
+                      if (path == manifest) {
+                        printf "%s %s %s\n", $1, $2, manifest_sha
+                      } else if (!skip) {
+                        print
+                      }
+                    }' manifest_sha="$MANIFEST_SHA")
                   if [ -z "$ENTRIES" ]; then
                     echo "::error::Could not read the tree for ${REV} while fingerprinting the package"
                     return 1
                   fi
-                  NORMALISED=$(printf '%s\n' "$ENTRIES" \
-                    | sed -E "s#^([0-9]+ blob )[0-9a-f]+\t${EXTENSION_XML}\$#\1${MANIFEST_SHA}\t${EXTENSION_XML}#" \
-                    | sha256sum | cut -d' ' -f1)
-                  echo "$NORMALISED"
+                  printf '%s\n' "$ENTRIES" | sha256sum | cut -d' ' -f1
                 }
 
                 LAST_RELEASED_TAG=""
