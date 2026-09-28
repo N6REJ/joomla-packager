@@ -770,6 +770,37 @@ runs:
                 
                 echo "Removed all backup files and temporary files from repository"
 
+        -   name: Sync packaged update feed
+            shell: bash
+            run: |
+                set -euo pipefail
+                EXTENSION_NAME="${{ steps.extension_details.outputs.extension_name }}"
+                UPDATES_XML="${{ inputs.updates-xml-file }}"
+                VERSION="${{ steps.set_version.outputs.version }}"
+                DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
+
+                # The package is assembled before the release exists, so the feed copied
+                # into the ZIP would otherwise still advertise the previous version and point
+                # at a download URL for a release that is no longer current. Write the final
+                # values into the working-tree copy now, so the packaged feed matches the
+                # manifest. "Publish Joomla update feed" re-applies the same values later and
+                # doubles as a verification pass once the asset is confirmed to exist.
+                if [ ! -f "$UPDATES_XML" ]; then
+                    echo "No $UPDATES_XML present to sync; the publish step will create it"
+                    exit 0
+                fi
+
+                BEFORE=$(cat "$UPDATES_XML")
+
+                sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
+                sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">${DOWNLOAD_URL}</downloadurl>|g" "$UPDATES_XML"
+
+                if [ "$BEFORE" = "$(cat "$UPDATES_XML")" ]; then
+                    echo "$UPDATES_XML already advertises ${VERSION}"
+                else
+                    echo "Synced $UPDATES_XML to ${VERSION} so the packaged feed is not stale"
+                fi
+
         -   name: Create package
             id: create_package
             shell: bash
