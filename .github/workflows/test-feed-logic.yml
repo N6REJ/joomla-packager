@@ -1,0 +1,52 @@
+name: Test feed logic
+
+# Unit tests for the two steps that maintain a packaged update feed, extracted
+# from action.yml and run offline. They exist because those steps gate on
+# `create-release: 'true'`, and this repository is the packager rather than an
+# extension, so no workflow here can reach them: running the action here would
+# publish a copy of the whole packager as a release asset. That left the branch
+# which rewrites the feed a real Joomla site reads back with no coverage, and a
+# stale packaged feed shipped in the module's 2026.09.28 release as a result.
+#
+# No release is created and nothing is committed by this workflow.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'action.yml'
+      - 'test/**'
+  pull_request:
+    paths:
+      - 'action.yml'
+      - 'test/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  feed-logic:
+    name: Feed steps (${{ matrix.script }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        script:
+          - test_feed_sync.py
+          - test_feed_publish.py
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: python -m pip install --quiet pyyaml
+
+      - name: Run test/${{ matrix.script }}
+        run: python test/${{ matrix.script }}
