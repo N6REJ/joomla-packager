@@ -77,6 +77,7 @@ jobs:
 |-------|---------|-------------|
 | `manual-version` | `''` | Explicit version, overrides every scheme |
 | `version-scheme` | `date` | `date` → `2025.10.02.3`, or `semver` → bumps the patch of the manifest `<version>` when that version was already released |
+| `timezone` | `America/Chicago` | IANA zone used for the date-based version, the manifest `<creationDate>` and the changelog date. GitHub runners are UTC, which stamps an evening US build with tomorrow's date |
 | `create-release` | `true` | Create the GitHub release and upload the package |
 | `update-joomla-server` | `true` | Publish `updates.xml` **after** the release asset is verified (requires `create-release`) |
 | `commit-changes` | `false` | Commit and push the manifest, `updates.xml` and changelog back to the branch |
@@ -100,6 +101,7 @@ The action is careful about *when* a version becomes public:
 - **Re-runs do not mint empty versions.** Before choosing a version, the action fingerprints the files that actually ship and compares that against the most recent release. If nothing has changed, that version is reused and the release steps are skipped — a re-run, a manual dispatch or a retried job cannot push an identical package onto every installed site as an "update available". The fingerprint mirrors the packaging step's exclusions, so it covers exactly what a user installs: it ignores what the action itself regenerates (`CHANGELOG.md`, `updates.xml`), the manifest's own `<version>`, `<creationDate>` and `<copyright>`, `@version`/`@copyright` headers in PHP, CSS and language files, and everything the package excludes such as `.github/`, `.gitignore`, `build/` and `README.md`. Editing a CI workflow or re-pinning this action therefore does not bump your users' version, while a real source change — including a new field in the manifest — still does.
 - **Nothing is left behind.** The action updates files in the workspace only. Set `commit-changes: 'true'` to have it commit and push the version bump, the feed and the changelog back to your branch — otherwise your workflow must do that itself, and a diff check that ignores untracked files will silently drop the feed update. When a version is reused, the changelog is not regenerated and nothing is committed, so the branch stays untouched.
 - **Only release metadata is generated.** `dir-tree-file` is written next to the build directory and attached to the release, not inside the installable package, so it never ends up on the end user's server.
+- **Dates follow your day, not the runner's.** The version, the manifest `<creationDate>` and the changelog date are all computed in `timezone` (default `America/Chicago`). Set it to `UTC` or your own zone as needed. An unrecognised zone fails the run rather than silently falling back to UTC.
 
 ## 🔑 Token Permissions
 

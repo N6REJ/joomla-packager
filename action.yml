@@ -123,6 +123,10 @@ inputs:
         description: 'Whether to publish the Joomla update server XML. Requires create-release to be true, and the release asset is verified before the feed is updated'
         required: false
         default: 'true'
+    timezone:
+        description: 'IANA time zone used for the date-based version, the manifest creation date and the changelog date, e.g. America/Chicago. GitHub runners are UTC, which can date a release to the following day'
+        required: false
+        default: 'America/Chicago'
     commit-changes:
         description: 'Commit and push the updated files (manifest, updates.xml, changelog) back to the branch. Recommended so the update feed is never left stale'
         required: false
@@ -257,10 +261,23 @@ runs:
             id: set_version
             shell: bash
             run: |
-                CREATION_DATE=$(date +'%Y %B %d')
-                CURRENT_YEAR=$(date +'%Y')
+                CREATION_DATE=$(TZ="$TIMEZONE" date +'%Y %B %d')
+                CURRENT_YEAR=$(TZ="$TIMEZONE" date +'%Y')
                 EXTENSION_XML="${{ steps.extension_details.outputs.extension_xml }}"
                 CHANGELOG_FILE="${{ inputs.changelog-file }}"
+                TIMEZONE="${{ inputs.timezone }}"
+
+                # Release dates must reflect the maintainer's day, not the
+                # runner's. GitHub runners are UTC, so an evening build in the
+                # US would be stamped with tomorrow's date.
+                if ! printf '%s' "$TIMEZONE" | grep -Eq '^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$'; then
+                    echo "::error::timezone must be an IANA zone name such as America/Chicago, got: ${TIMEZONE}"
+                    exit 1
+                fi
+                if [ -d /usr/share/zoneinfo ] && [ "$TIMEZONE" != "UTC" ] && [ ! -e "/usr/share/zoneinfo/$TIMEZONE" ]; then
+                    echo "::error::timezone '${TIMEZONE}' is not a recognised time zone"
+                    exit 1
+                fi
 
                 # Fingerprint of the files that actually ship in the package.
                 #
@@ -374,7 +391,7 @@ runs:
                   fi
                 else
                   # Use automatic date-based versioning
-                  BASE_VERSION=$(date +'%Y.%m.%d')
+                  BASE_VERSION=$(TZ="$TIMEZONE" date +'%Y.%m.%d')
                   git fetch --tags
                   if [ -n "$LAST_RELEASED_TAG" ] && [ "$CURRENT_CONTENT_SIG" = "$RELEASED_CONTENT_SIG" ]; then
                     VERSION="$LAST_RELEASED_TAG"
@@ -666,8 +683,12 @@ runs:
             id: changelog
             shell: bash
             run: |
-                PREVIOUS_TAG=$(git describe --tags --abbrev=0 --always $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-                CURRENT_DATE=$(date -u +"%Y-%m-%d")
+                # No --always here: it makes describe fall back to a commit hash
+                # when the repository has no tags yet, which turns an empty
+                # "previous tag" into a bogus range and produces a changelog
+                # entry for a commit that does not exist.
+                PREVIOUS_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+                CURRENT_DATE=$(TZ="${{ inputs.timezone }}" date +"%Y-%m-%d")
                 
                 ADDED=""
                 CHANGED=""
@@ -682,10 +703,16 @@ runs:
                 fi
                 
                 while IFS= read -r line; do
-                  COMMIT_MSG=$(echo "$line" | cut -d'|' -f1)
-                  COMMIT_HASH=$(echo "$line" | cut -d'|' -f2)
-                
-                  if [[ "$COMMIT_MSG" =~ ^(Add|Create|Implement|Feature) ]]; then
+                    COMMIT_MSG=$(echo "$line" | cut -d'|' -f1)
+                    COMMIT_HASH=$(echo "$line" | cut -d'|' -f2)
+
+                    # An empty range still yields one empty line, which would
+                    # otherwise be rendered as a bullet with no text and no hash.
+                    if [ -z "$COMMIT_MSG" ]; then
+                      continue
+                    fi
+
+                    if [[ "$COMMIT_MSG" =~ ^(Add|Create|Implement|Feature) ]]; then
                     ADDED="$ADDED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
                   elif [[ "$COMMIT_MSG" =~ ^(Update|Improve|Enhance|Refactor|Change) ]]; then
                     CHANGED="$CHANGED\n* $COMMIT_MSG ([${COMMIT_HASH}](https://github.com/${{ github.repository }}/commit/${COMMIT_HASH}))"
