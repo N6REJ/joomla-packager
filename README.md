@@ -282,6 +282,24 @@ Contributions are welcome! Feel free to:
 - Submit pull requests
 - Share your use cases
 
+### Testing
+
+| Workflow | What it covers |
+| --- | --- |
+| `test-component.yml`, `test-package.yml`, `test-plugin.yml` | End-to-end packaging against a real release. Smoke tests: they prove the action completes, not that it produced correct output. |
+| `test-module.yml` | Packaging plus assertions that the manifest, the working-tree feed and the copy inside the package all agree. `test-module` is the only test extension that ships an `updates.xml`, so this is the only end-to-end feed coverage. |
+| `test-feed-logic.yml` | Unit tests for the two steps that maintain the feed. |
+
+The feed steps are gated on `create-release: 'true'`, so the `test-module` workflow can never reach them: this repository is the packager, and the action packages the repository root, which would publish a copy of the whole packager as a release asset. `test/test_feed_sync.py` and `test/test_feed_publish.py` cover that logic instead, by extracting each step from `action.yml` and running it offline against temporary fixtures. They can be run directly:
+
+```bash
+python -m pip install pyyaml
+python test/test_feed_sync.py
+python test/test_feed_publish.py
+```
+
+Both extract their step from `action.yml` at run time rather than copying it, so they cannot drift from the logic they test, and both fail loudly if a step is renamed or gains an expression the harness does not model. The sync step makes no network calls; the publish step reaches for `gh` and `sleep`, which are replaced with bash function stubs so the release-asset guard and its retry loop can be driven deterministically. `test_feed_sync.py` additionally asserts that the two steps' `sed` expressions remain byte-identical, because they are separate copies of the same rewrite — a divergence there is what allowed a packaged feed to advertise the previous version.
+
 ## 📄 License
 
 This project is open source and available under the GPL3+ License.
