@@ -46,12 +46,20 @@ STEP_ID = "__run_publish_feed"
 # future edit to the step cannot quietly stop being exercised.
 EXPRESSIONS = {
     "steps.extension_details.outputs.extension_name": "__EXT_NAME",
+    "steps.extension_details.outputs.extension_type": "__EXT_TYPE",
+    "steps.extension_details.outputs.extension_client": "__EXT_CLIENT",
     "inputs.updates-xml-file": "__FEED",
     "steps.set_version.outputs.version": "__VER",
+    "inputs.targetplatform-name": "__TP_NAME",
+    "inputs.targetplatform-version": "__TP_VERSION",
     "github.repository": "__REPO",
 }
 
 EXT_NAME = "mod_test"
+EXT_TYPE = "module"
+EXT_CLIENT = "site"
+TP_NAME = "joomla"
+TP_VERSION = "6.*"
 VERSION = "2026.09.28"
 REPO = "N6REJ/joomla-packager"
 ASSET = "%s_%s.zip" % (EXT_NAME, VERSION)
@@ -151,8 +159,12 @@ def run_step(script, feed, mode, flaky_after=0, seed=None):
     env = dict(os.environ)
     env.update(
         __EXT_NAME=EXT_NAME,
+        __EXT_TYPE=EXT_TYPE,
+        __EXT_CLIENT=EXT_CLIENT,
         __FEED=feed,
         __VER=VERSION,
+        __TP_NAME=TP_NAME,
+        __TP_VERSION=TP_VERSION,
         __REPO=REPO,
         GH_MODE=mode,
         GH_LOG=str(root / "gh.log"),
@@ -193,6 +205,28 @@ def feed_values(path):
     return update.findtext("version"), (url.text if url is not None else None), element
 
 
+def feed_identity(path):
+    """Return (type, client, targetplatform_name, targetplatform_version).
+
+    These are the fields an installed site matches the feed entry against. A
+    generated feed that omits them is the bug this harness exists to catch, so
+    a parse failure degrades to None rather than raising.
+    """
+    try:
+        update = ET.parse(str(path)).getroot().find("update")
+    except (ET.ParseError, OSError):
+        return (None, None, None, None)
+    if update is None:
+        return (None, None, None, None)
+    tp = update.find("targetplatform")
+    return (
+        update.findtext("type"),
+        update.findtext("client"),
+        (tp.get("name") if tp is not None else None),
+        (tp.get("version") if tp is not None else None),
+    )
+
+
 def calls(proc):
     text = (Path(proc.sh_root) / "gh.log").read_text(encoding="utf-8")
     return len([l for l in text.splitlines() if l.strip()])
@@ -231,6 +265,14 @@ def main():
               url == EXPECTED_URL, "got %r" % url)
         check("created feed names the extension element",
               element == EXT_NAME, "got %r" % element)
+        typ, client, tpname, tpver = feed_identity(p.sh_feed)
+        check("created feed carries the extension type",
+              typ == EXT_TYPE, "got %r" % typ)
+        check("created feed carries the site client",
+              client == EXT_CLIENT, "got %r" % client)
+        check("created feed carries the targetplatform",
+              (tpname, tpver) == (TP_NAME, TP_VERSION),
+              "got name=%r version=%r" % (tpname, tpver))
         check("created feed verifies the asset before writing",
               calls(p) == 1, "gh called %d times" % calls(p))
     shutil.rmtree(Path(p.sh_root), ignore_errors=True)

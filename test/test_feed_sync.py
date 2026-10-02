@@ -47,7 +47,11 @@ PREV = "2026.9.27"
 EXPRESSIONS = {
     "inputs.updates-xml-file": "updates.xml",
     "steps.extension_details.outputs.extension_name": EXT_NAME,
+    "steps.extension_details.outputs.extension_type": "module",
+    "steps.extension_details.outputs.extension_client": "site",
     "steps.set_version.outputs.version": NEW,
+    "inputs.targetplatform-name": "joomla",
+    "inputs.targetplatform-version": "6.*",
     "github.repository": REPO,
 }
 
@@ -209,7 +213,9 @@ def main():
     #    must land on exactly the bytes the sync step produced.
     header = [l for l in publish.splitlines()
               if l.strip().startswith(("EXTENSION_NAME=", "UPDATES_XML=", "VERSION=",
-                                       "DOWNLOAD_URL=", "ASSET_NAME="))]
+                                       "DOWNLOAD_URL=", "ASSET_NAME=",
+                                       "EXTENSION_TYPE=", "EXTENSION_CLIENT=",
+                                       "TP_NAME=", "TP_VERSION="))]
     pub_rewrites = "\n".join(header + sed_lines(publish))
     check("publish rewrites are recoverable for comparison",
           len(sed_lines(publish)) == 2, publish)

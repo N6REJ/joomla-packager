@@ -63,6 +63,15 @@ Below is a detailed explanation of all inputs supported by this action:
 - **updates-xml-file** (string, optional):
   - Description: Updates XML file.
   - Default: `'updates.xml'`
+- **extension-client** (string, optional):
+  - Description: Joomla client for the update feed entry, `site` or `administrator`. When empty it is read from the manifest `client` attribute, then derived from the type (components default to `administrator`, everything else to `site`).
+  - Default: `''`
+- **targetplatform-name** (string, optional):
+  - Description: `name` attribute of the `<targetplatform>` element written to the feed.
+  - Default: `'joomla'`
+- **targetplatform-version** (string, optional):
+  - Description: `version` regex of the `<targetplatform>` element, e.g. `6.*`. Applied only when the feed does not already declare one.
+  - Default: `'6.*'`
 
 ### Directory Configurations
 - **css-dir** (string, optional):

@@ -36,6 +36,7 @@ jobs:
         script:
           - test_feed_sync.py
           - test_feed_publish.py
+          - test_feed_fields.py
     steps:
       - name: Check out
         uses: actions/checkout@v4

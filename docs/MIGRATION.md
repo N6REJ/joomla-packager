@@ -118,6 +118,9 @@ jobs:
 | `LICENSE_FILE` | `license-file` | |
 | `FAVICON_FILE` | `favicon-file` | |
 | `UPDATES_XML_FILE` | `updates-xml-file` | |
+| (none) | `extension-client` | Optional, feed client, detected from the manifest when empty |
+| (none) | `targetplatform-name` | Optional, default 'joomla' |
+| (none) | `targetplatform-version` | Optional, default '6.*' |
 | `CSS_DIR` | `css-dir` | |
 | `JS_DIR` | `js-dir` | |
 | `TMPL_DIR` | `tmpl-dir` | |

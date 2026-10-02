@@ -75,6 +75,18 @@ inputs:
         description: 'Updates XML file'
         required: false
         default: 'updates.xml'
+    extension-client:
+        description: "Joomla client for the update feed entry: 'site' or 'administrator'. If empty, it is taken from the manifest client attribute when present, otherwise it is derived from the extension type (components default to administrator, everything else to site)."
+        required: false
+        default: ''
+    targetplatform-name:
+        description: 'Value of the update feed <targetplatform name="..."> attribute'
+        required: false
+        default: 'joomla'
+    targetplatform-version:
+        description: 'Value of the update feed <targetplatform version="..."> attribute, a regex prefix such as 6.* . Used when the feed does not already declare a <targetplatform>'
+        required: false
+        default: '6.*'
 
     # Directory configurations
     css-dir:
@@ -244,13 +256,53 @@ runs:
                   fi
                 fi
                 
+                # Determine the extension type and client for the update feed.
+                # The client and type are what an installed site matches the feed
+                # entry against (element + type + client_id + folder); getting them
+                # wrong means the update is silently never offered.
+                EXT_TAG=$(grep -m1 -oE '<extension[^>]*>' "$EXTENSION_XML" 2>/dev/null || true)
+                MANIFEST_TYPE=$(printf '%s' "$EXT_TAG" | sed -n -E 's/.*[[:space:]]type="([^"]+)".*/\1/p')
+                MANIFEST_CLIENT=$(printf '%s' "$EXT_TAG" | sed -n -E 's/.*[[:space:]]client="([^"]+)".*/\1/p')
+
+                if [ -n "${{ inputs.extension-type }}" ]; then
+                  EXTENSION_TYPE="${{ inputs.extension-type }}"
+                elif [ -n "$MANIFEST_TYPE" ]; then
+                  EXTENSION_TYPE="$MANIFEST_TYPE"
+                else
+                  case "$EXTENSION_NAME" in
+                    mod_*) EXTENSION_TYPE="module" ;;
+                    plg_*) EXTENSION_TYPE="plugin" ;;
+                    com_*) EXTENSION_TYPE="component" ;;
+                    pkg_*) EXTENSION_TYPE="package" ;;
+                    lib_*) EXTENSION_TYPE="library" ;;
+                    tpl_*) EXTENSION_TYPE="template" ;;
+                    *)     EXTENSION_TYPE="" ;;
+                  esac
+                fi
+
+                if [ -n "${{ inputs.extension-client }}" ]; then
+                  EXTENSION_CLIENT="${{ inputs.extension-client }}"
+                elif [ -n "$MANIFEST_CLIENT" ]; then
+                  EXTENSION_CLIENT="$MANIFEST_CLIENT"
+                elif [ "$EXTENSION_TYPE" = "component" ]; then
+                  # Components register in the administrator client, everything
+                  # else in the site client unless the manifest says otherwise.
+                  EXTENSION_CLIENT="administrator"
+                else
+                  EXTENSION_CLIENT="site"
+                fi
+
                 # Output the determined values
                 echo "extension_name=$EXTENSION_NAME" >> $GITHUB_OUTPUT
                 echo "extension_xml=$EXTENSION_XML" >> $GITHUB_OUTPUT
+                echo "extension_type=$EXTENSION_TYPE" >> $GITHUB_OUTPUT
+                echo "extension_client=$EXTENSION_CLIENT" >> $GITHUB_OUTPUT
                 
                 echo "Final extension details:"
                 echo "  Name: $EXTENSION_NAME"
                 echo "  XML: $EXTENSION_XML"
+                echo "  Type: $EXTENSION_TYPE"
+                echo "  Client: $EXTENSION_CLIENT"
 
         -   name: Set up PHP
             uses: shivammathur/setup-php@v2
@@ -770,6 +822,55 @@ runs:
                 
                 echo "Removed all backup files and temporary files from repository"
 
+        -   name: Ensure Joomla update feed fields
+            shell: bash
+            run: |
+                set -euo pipefail
+                UPDATES_XML="${{ inputs.updates-xml-file }}"
+                EXTENSION_TYPE="${{ steps.extension_details.outputs.extension_type }}"
+                EXTENSION_CLIENT="${{ steps.extension_details.outputs.extension_client }}"
+                TP_NAME="${{ inputs.targetplatform-name }}"
+                TP_VERSION="${{ inputs.targetplatform-version }}"
+
+                # A feed that predates these fields, or the one the publish step
+                # generates, is useless to Joomla without them: an entry with no
+                # <targetplatform> is skipped outright, and one whose <client> does
+                # not match the installed client_id is stored against no extension
+                # and then filtered out of the update list. Fill in what is
+                # missing; leave a value the extension itself declared alone.
+                if [ ! -f "$UPDATES_XML" ]; then
+                    echo "No $UPDATES_XML present; nothing to fill in"
+                    exit 0
+                fi
+
+                BEFORE=$(cat "$UPDATES_XML")
+
+                # An empty <type /> or <type></type> cannot match anything.
+                if [ -n "$EXTENSION_TYPE" ]; then
+                    sed -i -E "s|<type[[:space:]]*/>|<type>${EXTENSION_TYPE}</type>|g; s|<type>[[:space:]]*</type>|<type>${EXTENSION_TYPE}</type>|g" "$UPDATES_XML"
+                fi
+
+                awk -v type="$EXTENSION_TYPE" -v client="$EXTENSION_CLIENT" \
+                    -v tpname="$TP_NAME" -v tpver="$TP_VERSION" '
+                    /<update>/        { has_type = 0; has_client = 0; has_targetplat = 0 }
+                    /<type>/          { has_type = 1 }
+                    /<client>/        { has_client = 1 }
+                    /<targetplatform/ { has_targetplat = 1 }
+                    /<\/update>/ {
+                        if (type != "" && !has_type) printf "        <type>%s</type>\n", type
+                        if (!has_client)             printf "        <client>%s</client>\n", client
+                        if (!has_targetplat)         printf "        <targetplatform name=\"%s\" version=\"%s\" />\n", tpname, tpver
+                    }
+                    { print }
+                ' "$UPDATES_XML" > "$UPDATES_XML.tmp"
+                mv "$UPDATES_XML.tmp" "$UPDATES_XML"
+
+                if [ "$BEFORE" = "$(cat "$UPDATES_XML")" ]; then
+                    echo "$UPDATES_XML already carries type, client and targetplatform"
+                else
+                    echo "Filled in $UPDATES_XML (type=${EXTENSION_TYPE} client=${EXTENSION_CLIENT} targetplatform=${TP_NAME} ${TP_VERSION})"
+                fi
+
         -   name: Sync packaged update feed
             shell: bash
             run: |
@@ -931,6 +1032,10 @@ runs:
                 VERSION="${{ steps.set_version.outputs.version }}"
                 DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXTENSION_NAME}_${VERSION}.zip"
                 ASSET_NAME="${EXTENSION_NAME}_${VERSION}.zip"
+                EXTENSION_TYPE="${{ steps.extension_details.outputs.extension_type }}"
+                EXTENSION_CLIENT="${{ steps.extension_details.outputs.extension_client }}"
+                TP_NAME="${{ inputs.targetplatform-name }}"
+                TP_VERSION="${{ inputs.targetplatform-version }}"
 
                 # Never advertise a version that cannot actually be downloaded,
                 # otherwise installed sites are offered a package that 404s.
@@ -947,7 +1052,11 @@ runs:
                     sleep 5
                 done
 
-                # If updates.xml does not exist, create a minimal valid structure
+                # If updates.xml does not exist, create a valid structure. Every
+                # element an installed site matches on must be present: an entry
+                # with no <targetplatform> is skipped outright, an empty <type />
+                # matches nothing, and a <client> that disagrees with the installed
+                # client_id leaves the update attributed to no extension.
                 if [ ! -f "$UPDATES_XML" ]; then
                     echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
                     echo '<updates>' >> "$UPDATES_XML"
@@ -955,12 +1064,14 @@ runs:
                     echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
                     echo '    <description />' >> "$UPDATES_XML"
                     echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
-                    echo '    <type />' >> "$UPDATES_XML"
+                    echo '    <type>'"$EXTENSION_TYPE"'</type>' >> "$UPDATES_XML"
+                    echo '    <client>'"$EXTENSION_CLIENT"'</client>' >> "$UPDATES_XML"
                     echo "    <version>${VERSION}</version>" >> "$UPDATES_XML"
                     echo '    <infourl />' >> "$UPDATES_XML"
                     echo '    <downloads>' >> "$UPDATES_XML"
                     echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
                     echo '    </downloads>' >> "$UPDATES_XML"
+                    echo '    <targetplatform name="'"$TP_NAME"'" version="'"$TP_VERSION"'" />' >> "$UPDATES_XML"
                     echo '  </update>' >> "$UPDATES_XML"
                     echo '</updates>' >> "$UPDATES_XML"
                 fi
