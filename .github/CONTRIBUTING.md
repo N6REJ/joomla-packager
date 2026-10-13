@@ -1,4 +1,4 @@
-# Contributing to Joomla Packager
+# Contributing to this project
 
 Thank you for considering contributing to this project! Your help is greatly appreciated. Please follow these guidelines to help us maintain a healthy and productive community.
 
