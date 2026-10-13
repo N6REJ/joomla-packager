@@ -3,7 +3,7 @@
   "owner": "N6REJ",
   "repo": "joomla-packager",
   "visibility": "public",
-  "generatedAt": "2026-10-12T14:43:59.791Z",
+  "generatedAt": "2026-10-13T13:46:50.443Z",
   "stats": {
     "total": 2,
     "day": 0,
@@ -17,13 +17,14 @@
   },
   "snapshots": {
     "windowDays": 180,
-    "count": 3,
+    "count": 4,
     "firstDate": "2026-10-10",
-    "lastDate": "2026-10-12",
+    "lastDate": "2026-10-13",
     "series": {
       "2026-10-10": 2,
       "2026-10-11": 2,
-      "2026-10-12": 2
+      "2026-10-12": 2,
+      "2026-10-13": 2
     }
   },
   "profile": {
