@@ -14,7 +14,7 @@
         </tags>
         <maintainer>Test Company</maintainer>
         <maintainerurl>https://example.com</maintainerurl>
-        <targetplatform name="joomla" version="4.*" />
+        <targetplatform name="joomla" version="(5|6).*" />
         <client>site</client>
     </update>
 </updates>

@@ -70,8 +70,8 @@ Below is a detailed explanation of all inputs supported by this action:
   - Description: `name` attribute of the `<targetplatform>` element written to the feed.
   - Default: `'joomla'`
 - **targetplatform-version** (string, optional):
-  - Description: `version` regex of the `<targetplatform>` element, e.g. `6.*`. Applied only when the feed does not already declare one.
-  - Default: `'6.*'`
+  - Description: `version` regex of the `<targetplatform>` element, e.g. `(5|6).*`. Applied only when the feed does not already declare one.
+  - Default: `'(5|6).*'`
 
 ### Directory Configurations
 - **css-dir** (string, optional):
@@ -109,6 +109,15 @@ Below is a detailed explanation of all inputs supported by this action:
 - **update-joomla-server** (string, optional):
   - Description: Whether to update Joomla update server XML (`true` or `false`).
   - Default: `'true'`
+- **ignore-docs** (string, optional):
+  - Description: Whether to exclude the `docs/` directory from the package (`true` or `false`).
+  - Default: `'true'`
+- **ignore-stats** (string, optional):
+  - Description: Whether to exclude the `stats/` directory from the package (`true` or `false`).
+  - Default: `'true'`
+- **ignore-updates-xml** (string, optional):
+  - Description: Whether to exclude the update feed (`updates-xml-file`) from the package (`true` or `false`).
+  - Default: `'true'`
 
 For most projects, you only need to set the required inputs. All other options have sensible defaults and can be overridden as needed.
 
@@ -127,6 +136,7 @@ If any of these optional folders exist (including `media`), they will be include
 
 The action automatically excludes the following from your package:
 - `.git/`, `.github/`, `.DS_Store`, `Thumbs.db`, `node_modules/`, and `.packagerignore` itself
+- `docs/`, `stats/` and the update feed (`updates-xml-file`) unless the matching `ignore-docs`, `ignore-stats` or `ignore-updates-xml` input is set to `false`
 - Any files or directories listed in a `.packagerignore` file at the root of your repository (if present)
 
 The `.packagerignore` file works like a `.gitignore`—add one pattern per line to exclude files or folders from the package. Lines starting with `#` are treated as comments.
@@ -164,7 +174,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
-      - uses: N6REJ/joomla-packager@2025.6.24
+      - uses: N6REJ/joomla-packager@2026.10.16
         with:
           extension-name: 'mod_example'
           extension-xml: 'mod_example.xml'

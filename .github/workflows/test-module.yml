@@ -14,7 +14,7 @@ jobs:
         uses: actions/checkout@v7
       - name: Run Joomla Packager Action (Module)
         id: package
-        uses: N6REJ/joomla-packager@2026.9.28
+        uses: N6REJ/joomla-packager@2026.10.16
         with:
           extension-name: 'mod_test'
           extension-xml: 'test-extensions/test-module/mod_test.xml'
@@ -23,6 +23,9 @@ jobs:
           # repository, so point it at the test module's own feed. Without this the
           # feed path is skipped entirely and never exercised.
           updates-xml-file: 'test-extensions/test-module/updates.xml'
+          # Keep the feed in the package so the parity check below still has a
+          # bundled feed to assert on; ignore-updates-xml defaults to true.
+          ignore-updates-xml: 'false'
           github-token: ${{ github.token }}
           # This repository is the packager itself, not an extension, so the
           # package is a copy of the whole tree. Publish nothing: the point of

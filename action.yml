@@ -84,9 +84,9 @@ inputs:
         required: false
         default: 'joomla'
     targetplatform-version:
-        description: 'Value of the update feed <targetplatform version="..."> attribute, a regex prefix such as 6.* . Used when the feed does not already declare a <targetplatform>'
+        description: 'Value of the update feed <targetplatform version="..."> attribute, a regex prefix such as (5|6).* . Used when the feed does not already declare a <targetplatform>'
         required: false
-        default: '6.*'
+        default: '(5|6).*'
 
     # Directory configurations
     css-dir:
@@ -147,6 +147,18 @@ inputs:
         description: 'Include README.md in the package (true/false)'
         required: false
         default: 'false'
+    ignore-docs:
+        description: 'Exclude the docs/ directory from the package (true/false)'
+        required: false
+        default: 'true'
+    ignore-stats:
+        description: 'Exclude the stats/ directory from the package (true/false)'
+        required: false
+        default: 'true'
+    ignore-updates-xml:
+        description: 'Exclude the update feed (updates-xml-file) from the package (true/false)'
+        required: false
+        default: 'true'
 
 outputs:
     version:
@@ -362,10 +374,13 @@ runs:
                   # what a user actually installs. Without that, re-pinning this
                   # action or editing a CI file would look like a shipped change
                   # and push a pointless new version onto every installed site.
-                  ENTRIES=$(git ls-tree -r "$REV" | awk -v changelog="$CHANGELOG_FILE" -v manifest="$EXTENSION_XML" '
+                  ENTRIES=$(git ls-tree -r "$REV" | awk -v changelog="$CHANGELOG_FILE" -v manifest="$EXTENSION_XML" \
+                    -v ignore_docs="${{ inputs.ignore-docs }}" -v ignore_stats="${{ inputs.ignore-stats }}" '
                     BEGIN {
-                      split(".git .github node_modules build package", d, " ")
-                      for (i in d) dirs[d[i]] = 1
+                      n = split(".git .github node_modules build package", d, " ")
+                      if (ignore_docs == "true") d[++n] = "docs"
+                      if (ignore_stats == "true") d[++n] = "stats"
+                      for (i = 1; i <= n; i++) dirs[d[i]] = 1
                     }
                     {
                       path = $0
@@ -933,6 +948,17 @@ runs:
                 # Exclude README.md unless readme input is true
                 if [ "${{ inputs.readme }}" != "true" ]; then
                   EXCLUDES+=(--exclude='README.md')
+                fi
+                # Exclude docs/, stats/ and the update feed when the matching
+                # ignore-* input says so (all default to true)
+                if [ "${{ inputs.ignore-docs }}" = "true" ]; then
+                  EXCLUDES+=(--exclude='docs/')
+                fi
+                if [ "${{ inputs.ignore-stats }}" = "true" ]; then
+                  EXCLUDES+=(--exclude='stats/')
+                fi
+                if [ "${{ inputs.ignore-updates-xml }}" = "true" ] && [ -n "${{ inputs.updates-xml-file }}" ]; then
+                  EXCLUDES+=(--exclude="${{ inputs.updates-xml-file }}")
                 fi
                 if [ -f .packagerignore ]; then
                   while IFS= read -r line; do

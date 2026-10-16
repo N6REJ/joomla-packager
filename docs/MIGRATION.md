@@ -40,7 +40,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Joomla Extension Packager
-        uses: N6REJ/joomla-packager@2025.6.23
+        uses: N6REJ/joomla-packager@2026.10.16
         id: packager
         with:
           author: 'N6REJ'
@@ -80,7 +80,7 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Joomla Extension Packager
-        uses: N6REJ/joomla-packager@2025.6.23
+        uses: N6REJ/joomla-packager@2026.10.16
         id: packager
         with:
           author: 'N6REJ'
@@ -120,7 +120,7 @@ jobs:
 | `UPDATES_XML_FILE` | `updates-xml-file` | |
 | (none) | `extension-client` | Optional, feed client, detected from the manifest when empty |
 | (none) | `targetplatform-name` | Optional, default 'joomla' |
-| (none) | `targetplatform-version` | Optional, default '6.*' |
+| (none) | `targetplatform-version` | Optional, default '(5|6).*' |
 | `CSS_DIR` | `css-dir` | |
 | `JS_DIR` | `js-dir` | |
 | `TMPL_DIR` | `tmpl-dir` | |
@@ -134,6 +134,9 @@ jobs:
 | (none) | `create-release` | Optional, default 'true' |
 | (none) | `upload-artifact` | Optional, default 'true' |
 | (none) | `update-joomla-server` | Optional, default 'true' |
+| (none) | `ignore-docs` | Optional, exclude `docs/` from the package, default 'true' |
+| (none) | `ignore-stats` | Optional, exclude `stats/` from the package, default 'true' |
+| (none) | `ignore-updates-xml` | Optional, exclude the update feed from the package, default 'true' |
 
 > **Note:** The inputs listed as `(none)` are new options available in the composite action and do not have direct equivalents in the original workflow. They provide additional flexibility and control over the packaging and release process.
 
@@ -177,7 +180,7 @@ You can add custom steps before or after the packaging:
     # Your custom validation logic
     
 - name: Package Module
-  uses: N6REJ/joomla-packager@2025.6.23
+  uses: N6REJ/joomla-packager@2026.10.16
   id: packager
   with:
     # ... your inputs
@@ -194,7 +197,7 @@ The composite action provides outputs you can use:
 
 ```yaml
 - name: Package Module
-  uses: N6REJ/joomla-packager@2025.6.23
+  uses: N6REJ/joomla-packager@2026.10.16
   id: packager
   with:
     # ... your inputs
@@ -211,7 +214,7 @@ The composite action provides outputs you can use:
 You can control features through inputs:
 
 ```yaml
-- uses: N6REJ/joomla-packager@2025.6.23
+- uses: N6REJ/joomla-packager@2026.10.16
   with:
     extension-name: 'mod_example'
     extension-xml: 'mod_example.xml'

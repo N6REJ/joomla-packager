@@ -55,7 +55,7 @@ jobs:
           token: \${{ secrets.GH_PAT }}
       
       - name: Joomla Extension Packager
-        uses: N6REJ/joomla-packager@2025.6.23
+        uses: N6REJ/joomla-packager@2026.10.16
         id: packager
         with:
           extension-name: '$EXT_NAME'

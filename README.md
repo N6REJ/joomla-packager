@@ -43,7 +43,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
       
-      - uses: N6REJ/joomla-packager@v2025.6.24
+      - uses: N6REJ/joomla-packager@2026.10.16
         with:
           extension-name: 'mod_example'
           extension-xml: 'mod_example.xml'
@@ -84,13 +84,16 @@ jobs:
 | `updates-xml-file` | `updates.xml` | Update feed file name |
 | `extension-client` | `''` | `site` or `administrator` for the feed entry. Empty detects it from the manifest `client` attribute, then falls back to `administrator` for components and `site` for everything else |
 | `targetplatform-name` | `joomla` | `name` of the `<targetplatform>` element written into the feed |
-| `targetplatform-version` | `6.*` | `version` regex of the `<targetplatform>` element. Applied only when the feed does not already declare one, so a feed pinned to another Joomla major is left alone |
+| `targetplatform-version` | `(5|6).*` | `version` regex of the `<targetplatform>` element. Applied only when the feed does not already declare one, so a feed pinned to another Joomla major is left alone |
 | `changelog-file` | `CHANGELOG.md` | Generated changelog file name |
 | `license-file` | `License.txt` | License file name |
 | `file-updates` | `true` | Rewrite version/date/copyright in manifest, PHP, INI and CSS files |
 | `generate-changelog` | `true` | Generate a changelog from the commits since the previous tag |
 | `upload-artifact` | `true` | Also upload the unpacked package as a workflow artifact |
 | `readme` | `false` | Include `README.md` in the package ZIP |
+| `ignore-docs` | `true` | Exclude the `docs/` directory from the package ZIP |
+| `ignore-stats` | `true` | Exclude the `stats/` directory from the package ZIP |
+| `ignore-updates-xml` | `true` | Exclude the update feed (`updates-xml-file`) from the package ZIP |
 | `php-version` | `8.1` | PHP version used for the packaging steps |
 | `dir-tree-file` | `directory-structure.txt` | Directory listing attached to the release, empty to skip. Not included in the installable package |
 
@@ -240,7 +243,7 @@ When packaging multiple extensions, the action will:
 ### Using Semantic Versioning
 
 ```yaml
-- uses: N6REJ/joomla-packager@main
+- uses: N6REJ/joomla-packager@2026.10.16
   with:
     extension-name: 'mod_example'
     extension-xml: 'mod_example.xml'
