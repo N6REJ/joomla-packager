@@ -2,10 +2,10 @@ name: Create Packager Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g., 2026.10.16)'
-        required: true
+
+concurrency:
+  group: action-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -15,11 +15,30 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          gh release create "$VERSION" --title "Release $VERSION" --generate-notes
+          set -euo pipefail
+
+          BASE_VERSION=$(TZ=America/Chicago date +'%Y.%m.%d')
+          git fetch --tags origin
+
+          VERSION="$BASE_VERSION"
+          if git rev-parse -q --verify "refs/tags/$BASE_VERSION" >/dev/null; then
+            NEXT_SUFFIX=$(git tag --list "$BASE_VERSION.*" | awk -F. -v base="$BASE_VERSION" \
+              '$1 "." $2 "." $3 == base && $4 ~ /^[0-9]+$/ { if ($4 > max) max=$4 } END { print (max ? max + 1 : 1) }')
+            VERSION="${BASE_VERSION}.${NEXT_SUFFIX}"
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $VERSION already exists; refusing to overwrite it."
+            exit 1
+          fi
+
+          gh release create "$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "Release $VERSION" \
+            --generate-notes
