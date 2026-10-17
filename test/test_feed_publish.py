@@ -370,6 +370,24 @@ def main():
               "<version>2.0.0</version>" in text, text)
     shutil.rmtree(Path(p.sh_root), ignore_errors=True)
 
+    # Empty pre-existing fields are filled in place, never duplicated.
+    empty_fields = STALE_FEED.replace(
+        "<name>%s</name>" % EXT_NAME,
+        "<name>%s</name><element>%s</element><type></type><client></client>"
+        % (EXT_NAME, EXT_NAME),
+        1,
+    )
+    p = run_step(script, FEED_RELPATH, "present", seed=empty_fields)
+    check("empty existing feed fields are repaired", p.returncode == 0,
+          p.stdout + p.stderr)
+    if p.returncode == 0:
+        entry = ET.parse(str(p.sh_feed)).getroot().find("update")
+        check("empty fields are filled without duplicate elements",
+              entry.findtext("type") == EXT_TYPE and entry.findtext("client") == EXT_CLIENT
+              and len(entry.findall("type")) == 1 and len(entry.findall("client")) == 1,
+              p.sh_feed.read_text(encoding="utf-8"))
+    shutil.rmtree(Path(p.sh_root), ignore_errors=True)
+
     # A package's ZIP name may differ from the installed extension element in
     # its feed. Preserve declared Joomla identity while syncing release fields.
     p = run_step(script, FEED_RELPATH, "present", seed=package_feed())

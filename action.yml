@@ -1151,8 +1151,9 @@ runs:
                 }
                 for tag, value in defaults.items():
                     element = update.find(tag)
-                    if element is None or not (element.text or "").strip():
+                    if element is None:
                         element = ET.SubElement(update, tag)
+                    if not (element.text or "").strip():
                         element.text = value
                 update_version = update.find("version")
                 if update_version is None:
