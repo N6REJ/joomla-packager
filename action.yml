@@ -998,7 +998,7 @@ runs:
 
         -   name: Upload extension package files
             if: inputs.upload-artifact == 'true'
-            uses: actions/upload-artifact@v4
+            uses: actions/upload-artifact@v7
             with:
                 name: ${{ steps.extension_details.outputs.extension_name }}_${{ steps.set_version.outputs.version }}
                 path: ${{ steps.create_package.outputs.package_path }}
