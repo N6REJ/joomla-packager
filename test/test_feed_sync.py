@@ -187,6 +187,19 @@ def main():
           p.stdout + p.stderr + read_feed(d))
     shutil.rmtree(d, ignore_errors=True)
 
+    # ElementTree serializes a digest on one line. GNU sed does not consider a
+    # range's end address on the same line as its start, so pin that exact shape.
+    inline_hash = feed_xml(PREV, OLD_URL).replace(
+        "</downloads>", "</downloads>\n<sha256>" + "a" * 64 + "</sha256>")
+    d = case(inline_hash)
+    p = run(sync, d)
+    body = read_feed(d)
+    check("pre-package sync removes an inline checksum without truncating XML",
+          p.returncode == 0 and "<sha256>" not in body
+          and body.count("<updates>") == 1 and body.count("</updates>") == 1,
+          p.stdout + p.stderr + body)
+    shutil.rmtree(d, ignore_errors=True)
+
     # 2. Running twice must not churn the file.
     d = case(feed_xml(PREV, OLD_URL))
     run(sync, d)
