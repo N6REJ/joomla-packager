@@ -25,6 +25,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
+import hashlib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -76,6 +78,7 @@ STALE_FEED = """<?xml version="1.0" encoding="utf-8"?>
         <downloads>
             <downloadurl type="full" format="zip">https://github.com/%s/releases/download/1.0.0/%s_1.0.0.zip</downloadurl>
         </downloads>
+        <sha256>stale-not-a-valid-checksum</sha256>
     </update>
     <update>
         <name>other</name>
@@ -93,7 +96,35 @@ STUB_PRELUDE = r"""
 : > "$GH_LOG"
 : > "$SLEEP_LOG"
 
+python3() {
+  "$PYTHON_EXECUTABLE" "$@"
+}
+
+sha256sum() {
+  if [ "$SHA_MODE" = "malformed" ]; then
+    printf 'not-a-checksum  %s\n' "$2"
+  else
+    command sha256sum "$@"
+  fi
+}
+
 gh() {
+  if [ "$1" = "release" ] && [ "$2" = "download" ]; then
+    shift 2
+    tag="$1"
+    shift
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "--dir" ]; then
+        target_dir="$2"
+        shift 2
+      else
+        shift
+      fi
+    done
+    mkdir -p "$target_dir"
+    cp "$ASSET_SOURCE" "$target_dir/$ASSET_NAME"
+    return 0
+  fi
   echo "call" >> "$GH_LOG"
   count=$(wc -l < "$GH_LOG")
   case "$GH_MODE" in
@@ -148,13 +179,17 @@ def load_step():
     return script
 
 
-def run_step(script, feed, mode, flaky_after=0, seed=None):
+def run_step(script, feed, mode, flaky_after=0, seed=None, sha_mode="valid"):
     """Run the extracted step in a throwaway tree. Returns (proc, feed_path)."""
     root = Path(tempfile.mkdtemp(prefix="feed-publish-"))
     feed_path = root / feed
     feed_path.parent.mkdir(parents=True, exist_ok=True)
     if seed is not None:
         feed_path.write_text(seed, encoding="utf-8", newline="\n")
+
+    asset_source = root / "exact-release-asset.zip"
+    with zipfile.ZipFile(asset_source, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("mod_test.xml", "<extension version='2026.09.28' />\n")
 
     env = dict(os.environ)
     env.update(
@@ -166,11 +201,21 @@ def run_step(script, feed, mode, flaky_after=0, seed=None):
         __TP_NAME=TP_NAME,
         __TP_VERSION=TP_VERSION,
         __REPO=REPO,
+        EXTENSION_NAME=EXT_NAME,
+        EXTENSION_TYPE=EXT_TYPE,
+        EXTENSION_CLIENT=EXT_CLIENT,
+        VERSION=VERSION,
+        DOWNLOAD_URL=EXPECTED_URL,
+        TP_NAME=TP_NAME,
+        TP_VERSION=TP_VERSION,
+        PYTHON_EXECUTABLE=sys.executable,
         GH_MODE=mode,
         GH_LOG=str(root / "gh.log"),
         GH_FLAKY_AFTER=str(flaky_after),
+        SHA_MODE=sha_mode,
         SLEEP_LOG=str(root / "sleep.log"),
         ASSET_NAME=ASSET,
+        ASSET_SOURCE=str(asset_source),
         GITHUB_TOKEN="offline",
     )
 
@@ -203,6 +248,22 @@ def feed_values(path):
     element = update.findtext("element")
     url = update.find("downloads/downloadurl")
     return update.findtext("version"), (url.text if url is not None else None), element
+
+
+def feed_checksum(path):
+    update = ET.parse(str(path)).getroot().find("update")
+    return update.findtext("sha256") if update is not None else None
+
+
+def package_feed():
+    return STALE_FEED.replace(
+        "<name>%s</name>" % EXT_NAME,
+        "<name>mod_actual</name>", 1,
+    ).replace(
+        "<version>1.0.0</version>",
+        "<element>mod_actual</element><type>module</type><client>site</client>"
+        "<version>1.0.0</version>", 1,
+    )
 
 
 def feed_identity(path):
@@ -250,6 +311,15 @@ def main():
     if not shutil.which("bash"):
         sys.exit("bash is required")
 
+    document = load_yaml()
+    steps = document["runs"]["steps"]
+    publish_steps = [step for step in steps if step.get("name") == STEP_NAME]
+    commit_steps = [step for step in steps if step.get("name") == "Commit updated files"]
+    check("feed is published for an existing release",
+          len(publish_steps) == 1 and "steps.release_state.outputs.exists" not in publish_steps[0].get("if", ""))
+    check("feed changes can be committed for an existing release",
+          len(commit_steps) == 1 and "steps.release_state.outputs.exists" not in commit_steps[0].get("if", ""))
+
     script = load_step()
     print("extracted %d lines from %r\n" % (len(script.splitlines()), STEP_NAME))
 
@@ -263,6 +333,11 @@ def main():
               v == VERSION, "got %r" % v)
         check("created feed advertises the release download URL",
               url == EXPECTED_URL, "got %r" % url)
+        expected_sha = hashlib.sha256(
+            (Path(p.sh_root) / "exact-release-asset.zip").read_bytes()).hexdigest()
+        check("created feed SHA-256 matches exact release ZIP bytes",
+              feed_checksum(p.sh_feed) == expected_sha,
+              "expected %s got %s" % (expected_sha, feed_checksum(p.sh_feed)))
         check("created feed names the extension element",
               element == EXT_NAME, "got %r" % element)
         typ, client, tpname, tpver = feed_identity(p.sh_feed)
@@ -285,12 +360,31 @@ def main():
         v, url, _ = feed_values(p.sh_feed)
         check("stale feed version is rewritten", v == VERSION, "got %r" % v)
         check("stale feed URL is rewritten", url == EXPECTED_URL, "got %r" % url)
-        # The sed expressions are global, so every <version> in the file moves.
-        # Pinned here deliberately: a feed in an extension repository is
-        # single-extension, and changing this is a behaviour change, not a fix.
+        expected_sha = hashlib.sha256(
+            (Path(p.sh_root) / "exact-release-asset.zip").read_bytes()).hexdigest()
+        check("stale checksum is replaced with exact release ZIP SHA-256",
+              feed_checksum(p.sh_feed) == expected_sha,
+              "expected %s got %s" % (expected_sha, feed_checksum(p.sh_feed)))
         text = p.sh_feed.read_text(encoding="utf-8")
-        check("documents global <version> replacement (see comment)",
-              text.count("<version>%s</version>" % VERSION) == 2, text)
+        check("unrelated update entry is preserved",
+              "<version>2.0.0</version>" in text, text)
+    shutil.rmtree(Path(p.sh_root), ignore_errors=True)
+
+    # A package's ZIP name may differ from the installed extension element in
+    # its feed. Preserve declared Joomla identity while syncing release fields.
+    p = run_step(script, FEED_RELPATH, "present", seed=package_feed())
+    check("package feed with a distinct extension element is updated", p.returncode == 0,
+          p.stdout + p.stderr)
+    if p.returncode == 0:
+        package_update = ET.parse(str(p.sh_feed)).getroot().find("update")
+        check("existing Joomla element is preserved",
+              package_update.findtext("element") == "mod_actual",
+              package_update.findtext("element"))
+        check("package release version and checksum are updated",
+              package_update.findtext("version") == VERSION
+              and feed_checksum(p.sh_feed) == hashlib.sha256(
+                  (Path(p.sh_root) / "exact-release-asset.zip").read_bytes()).hexdigest(),
+              p.sh_feed.read_text(encoding="utf-8"))
     shutil.rmtree(Path(p.sh_root), ignore_errors=True)
 
     # 3. The 404 guard: no matching asset must fail and leave the feed alone.
@@ -320,7 +414,17 @@ def main():
           "rc=%d exists=%s" % (p.returncode, p.sh_feed.exists()))
     shutil.rmtree(Path(p.sh_root), ignore_errors=True)
 
-    # 5. Retry loop recovers: a late-appearing asset must still publish.
+    # 5. Reject malformed digests before touching an existing feed.
+    p = run_step(script, FEED_RELPATH, "present", seed=STALE_FEED,
+                 sha_mode="malformed")
+    check("fails when SHA-256 generation is malformed", p.returncode != 0,
+          p.stdout + p.stderr)
+    check("malformed digest leaves the prior feed untouched",
+          p.sh_feed.read_text(encoding="utf-8") == STALE_FEED,
+          p.sh_feed.read_text(encoding="utf-8")[:200])
+    shutil.rmtree(Path(p.sh_root), ignore_errors=True)
+
+    # 6. Retry loop recovers: a late-appearing asset must still publish.
     p = run_step(script, FEED_RELPATH, "flaky", flaky_after=3, seed=None)
     check("recovers when the asset appears on a later attempt",
           p.returncode == 0, p.stdout[-300:] + p.stderr[-300:])
@@ -328,6 +432,10 @@ def main():
         v, url, _ = feed_values(p.sh_feed)
         check("recovered run still writes a correct feed",
               v == VERSION and url == EXPECTED_URL, "%r / %r" % (v, url))
+        expected_sha = hashlib.sha256(
+            (Path(p.sh_root) / "exact-release-asset.zip").read_bytes()).hexdigest()
+        check("recovered feed SHA-256 matches release ZIP",
+              feed_checksum(p.sh_feed) == expected_sha, feed_checksum(p.sh_feed))
         check("recovered after retrying, not on the first try",
               calls(p) == 4, "gh called %d times" % calls(p))
     shutil.rmtree(Path(p.sh_root), ignore_errors=True)

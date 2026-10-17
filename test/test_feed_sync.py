@@ -176,6 +176,17 @@ def main():
     check("<element> untouched", "<element>%s</element>" % EXT_NAME in body)
     shutil.rmtree(d, ignore_errors=True)
 
+    # A digest belongs to the exact previous archive. The new archive does not
+    # exist until after packaging, so sync must not carry a stale digest forward.
+    stale_with_hash = feed_xml(PREV, OLD_URL).replace(
+        "</downloads>", "</downloads>\n<sha256>" + "a" * 64 + "</sha256>")
+    d = case(stale_with_hash)
+    p = run(sync, d)
+    check("pre-package sync removes the previous ZIP checksum",
+          p.returncode == 0 and "<sha256>" not in read_feed(d),
+          p.stdout + p.stderr + read_feed(d))
+    shutil.rmtree(d, ignore_errors=True)
+
     # 2. Running twice must not churn the file.
     d = case(feed_xml(PREV, OLD_URL))
     run(sync, d)
@@ -203,33 +214,10 @@ def main():
     check("missing feed: no file created", not (d / "updates.xml").exists())
     shutil.rmtree(d, ignore_errors=True)
 
-    # 5. Drift guard. The two steps carry separate copies of the same rewrites;
-    #    when they disagree, the packaged feed and the published feed disagree.
-    check("sync and publish use identical sed expressions",
-          sed_lines(sync) == sed_lines(publish),
-          "sync=%r\n           publish=%r" % (sed_lines(sync), sed_lines(publish)))
-
-    # 6. Parity: applying only the publish step's rewrites to the same input
-    #    must land on exactly the bytes the sync step produced.
-    header = [l for l in publish.splitlines()
-              if l.strip().startswith(("EXTENSION_NAME=", "UPDATES_XML=", "VERSION=",
-                                       "DOWNLOAD_URL=", "ASSET_NAME=",
-                                       "EXTENSION_TYPE=", "EXTENSION_CLIENT=",
-                                       "TP_NAME=", "TP_VERSION="))]
-    pub_rewrites = "\n".join(header + sed_lines(publish))
-    check("publish rewrites are recoverable for comparison",
-          len(sed_lines(publish)) == 2, publish)
-
-    d_sync, d_pub = case(feed_xml(PREV, OLD_URL)), case(feed_xml(PREV, OLD_URL))
-    run(sync, d_sync)
-    p6 = run(pub_rewrites, d_pub)
-    synced = read_feed(d_sync)
-    published = read_feed(d_pub)
-    check("publish rewrites run cleanly", p6.returncode == 0, p6.stdout + p6.stderr)
-    check("sync and publish produce byte-identical output", synced == published,
-          "sync=%r\n           publish=%r" % (synced[-200:], published[-200:]))
-    shutil.rmtree(d_sync, ignore_errors=True)
-    shutil.rmtree(d_pub, ignore_errors=True)
+    # The publish step now hashes the uploaded ZIP and writes XML structurally;
+    # its final checksum intentionally cannot match the pre-package feed.
+    check("sync explicitly discards checksums until the release ZIP exists",
+          "<sha256>" in sync and "<sha256>" not in publish, "sync/publish logic changed")
 
     passed = sum(1 for _, ok in RESULTS if ok)
     print("\n%d/%d checks passed" % (passed, len(RESULTS)))

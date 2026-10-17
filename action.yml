@@ -910,6 +910,9 @@ runs:
 
                 sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
                 sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">${DOWNLOAD_URL}</downloadurl>|g" "$UPDATES_XML"
+                # This copy is packaged before its release ZIP exists, so a checksum
+                # from the previous release must not be carried beside the new URL.
+                sed -i '/<sha256>/,/<\/sha256>/d' "$UPDATES_XML"
 
                 if [ "$BEFORE" = "$(cat "$UPDATES_XML")" ]; then
                     echo "$UPDATES_XML already advertises ${VERSION}"
@@ -1049,7 +1052,7 @@ runs:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
 
         -   name: Publish Joomla update feed
-            if: inputs.update-joomla-server == 'true' && inputs.create-release == 'true' && steps.release_state.outputs.exists != 'true'
+            if: inputs.update-joomla-server == 'true' && inputs.create-release == 'true'
             shell: bash
             run: |
                 set -euo pipefail
@@ -1067,7 +1070,7 @@ runs:
                 # otherwise installed sites are offered a package that 404s.
                 echo "Verifying release asset ${ASSET_NAME} exists..."
                 for attempt in 1 2 3 4 5 6 7 8 9 10; do
-                    if gh release view "$VERSION" --json assets --jq ".assets[].name" 2>/dev/null | grep -Fxq "$ASSET_NAME"; then
+                    if gh release view "$VERSION" --repo "${{ github.repository }}" --json assets --jq ".assets[].name" 2>/dev/null | grep -Fxq "$ASSET_NAME"; then
                         echo "Release asset confirmed: $ASSET_NAME"
                         break
                     fi
@@ -1078,41 +1081,141 @@ runs:
                     sleep 5
                 done
 
-                # If updates.xml does not exist, create a valid structure. Every
-                # element an installed site matches on must be present: an entry
-                # with no <targetplatform> is skipped outright, an empty <type />
-                # matches nothing, and a <client> that disagrees with the installed
-                # client_id leaves the update attributed to no extension.
-                if [ ! -f "$UPDATES_XML" ]; then
-                    echo '<?xml version="1.0" encoding="utf-8"?>' > "$UPDATES_XML"
-                    echo '<updates>' >> "$UPDATES_XML"
-                    echo '  <update>' >> "$UPDATES_XML"
-                    echo '    <name>'"$EXTENSION_NAME"'</name>' >> "$UPDATES_XML"
-                    echo '    <description />' >> "$UPDATES_XML"
-                    echo '    <element>'"$EXTENSION_NAME"'</element>' >> "$UPDATES_XML"
-                    echo '    <type>'"$EXTENSION_TYPE"'</type>' >> "$UPDATES_XML"
-                    echo '    <client>'"$EXTENSION_CLIENT"'</client>' >> "$UPDATES_XML"
-                    echo "    <version>${VERSION}</version>" >> "$UPDATES_XML"
-                    echo '    <infourl />' >> "$UPDATES_XML"
-                    echo '    <downloads>' >> "$UPDATES_XML"
-                    echo '      <downloadurl type="full" format="zip">'"$DOWNLOAD_URL"'</downloadurl>' >> "$UPDATES_XML"
-                    echo '    </downloads>' >> "$UPDATES_XML"
-                    echo '    <targetplatform name="'"$TP_NAME"'" version="'"$TP_VERSION"'" />' >> "$UPDATES_XML"
-                    echo '  </update>' >> "$UPDATES_XML"
-                    echo '</updates>' >> "$UPDATES_XML"
+                # Hash the bytes downloaded from the exact release asset; source
+                # fingerprints are unrelated to the archive Joomla installs.
+                ASSET_DIR=$(mktemp -d)
+                trap 'rm -rf "$ASSET_DIR"' EXIT
+                gh release download "$VERSION" --repo "${{ github.repository }}" --pattern "$ASSET_NAME" --dir "$ASSET_DIR"
+                ASSET_PATH="${ASSET_DIR}/${ASSET_NAME}"
+                if [ ! -f "$ASSET_PATH" ]; then
+                    echo "::error::Downloaded release asset missing at ${ASSET_PATH}; update feed NOT published"
+                    exit 1
                 fi
+                ZIP_SHA256=$(sha256sum "$ASSET_PATH" | cut -d' ' -f1)
+                if [[ ! "$ZIP_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+                    echo "::error::Invalid SHA-256 for ${ASSET_NAME}; update feed NOT published"
+                    exit 1
+                fi
+                export EXTENSION_NAME EXTENSION_TYPE EXTENSION_CLIENT VERSION DOWNLOAD_URL ZIP_SHA256 TP_NAME TP_VERSION
 
-                # Update version
-                sed -i "s|<version>.*</version>|<version>${VERSION}</version>|g" "$UPDATES_XML"
-                # Update download URL
-                sed -i "s|<downloadurl.*>.*</downloadurl>|<downloadurl type=\"full\" format=\"zip\">${DOWNLOAD_URL}</downloadurl>|g" "$UPDATES_XML"
-                echo "Updated $UPDATES_XML file with new version and download URL"
+                # Update one matching entry atomically only after the release
+                # asset exists and its exact bytes have been hashed.
+                python3 - "$UPDATES_XML" <<'PY'
+                import os
+                import sys
+                import tempfile
+                from urllib.parse import urlsplit
+                import xml.etree.ElementTree as ET
+
+                path = sys.argv[1]
+                extension = os.environ["EXTENSION_NAME"]
+                extension_type = os.environ["EXTENSION_TYPE"]
+                extension_client = os.environ["EXTENSION_CLIENT"]
+                version = os.environ["VERSION"]
+                download_url = os.environ["DOWNLOAD_URL"]
+                checksum = os.environ["ZIP_SHA256"]
+                target_name = os.environ["TP_NAME"]
+                target_version = os.environ["TP_VERSION"]
+
+                if os.path.exists(path):
+                    tree = ET.parse(path)
+                    root = tree.getroot()
+                else:
+                    root = ET.Element("updates")
+                    tree = ET.ElementTree(root)
+                if root.tag != "updates":
+                    raise SystemExit("::error::Update feed root must be <updates>")
+
+                updates = root.findall("update")
+                matches = [entry for entry in updates
+                           if entry.findtext("element") == extension or entry.findtext("name") == extension
+                           or os.path.basename(urlsplit(
+                               entry.findtext("downloads/downloadurl", default="")).path
+                           ).startswith(extension + "_")]
+                if len(matches) > 1:
+                    raise SystemExit(f"::error::Multiple update entries found for {extension}")
+                if matches:
+                    update = matches[0]
+                elif not updates:
+                    update = ET.SubElement(root, "update")
+                elif len(updates) == 1:
+                    update = updates[0]
+                else:
+                    raise SystemExit(f"::error::No unique update entry found for {extension}")
+
+                defaults = {
+                    "name": extension,
+                    "element": extension,
+                    "type": extension_type,
+                    "client": extension_client,
+                }
+                for tag, value in defaults.items():
+                    element = update.find(tag)
+                    if element is None or not (element.text or "").strip():
+                        element = ET.SubElement(update, tag)
+                        element.text = value
+                update_version = update.find("version")
+                if update_version is None:
+                    update_version = ET.SubElement(update, "version")
+                update_version.text = version
+
+                downloads = update.find("downloads")
+                if downloads is None:
+                    downloads = ET.SubElement(update, "downloads")
+                download = downloads.find("downloadurl")
+                if download is None:
+                    download = ET.SubElement(downloads, "downloadurl")
+                download.set("type", "full")
+                download.set("format", "zip")
+                download.text = download_url
+
+                checksums = update.findall("sha256")
+                digest = checksums[0] if checksums else ET.Element("sha256")
+                for duplicate in checksums[1:]:
+                    update.remove(duplicate)
+                digest.text = checksum
+                if not checksums:
+                    update.append(digest)
+
+                if update.find("targetplatform") is None:
+                    ET.SubElement(update, "targetplatform", {"name": target_name, "version": target_version})
+
+                ET.indent(tree, space="  ")
+                directory = os.path.dirname(os.path.abspath(path)) or "."
+                os.makedirs(directory, exist_ok=True)
+                fd, temporary = tempfile.mkstemp(dir=directory, prefix=".updates-", suffix=".xml")
+                try:
+                    with os.fdopen(fd, "wb") as output:
+                        tree.write(output, encoding="utf-8", xml_declaration=True)
+                    verified = ET.parse(temporary).getroot()
+                    selected = [entry for entry in verified.findall("update")
+                                if entry.findtext("downloads/downloadurl") == download_url]
+                    if (len(selected) != 1 or selected[0].findtext("version") != version
+                            or selected[0].findtext("downloads/downloadurl") != download_url
+                            or selected[0].findtext("sha256") != checksum
+                            or len(checksum) != 64
+                            or any(char not in "0123456789abcdef" for char in checksum)):
+                        raise SystemExit("::error::Generated feed checksum/version/URL validation failed")
+                    os.replace(temporary, path)
+                finally:
+                    if os.path.exists(temporary):
+                        os.unlink(temporary)
+                print(f"Published {extension} {version} with SHA-256 {checksum}")
+                PY
+
+                echo "Updated $UPDATES_XML with the verified SHA-256 for $ASSET_NAME"
                 cat "$UPDATES_XML"
             env:
                 GITHUB_TOKEN: ${{ inputs.github-token }}
+                EXTENSION_NAME: ${{ steps.extension_details.outputs.extension_name }}
+                EXTENSION_TYPE: ${{ steps.extension_details.outputs.extension_type }}
+                EXTENSION_CLIENT: ${{ steps.extension_details.outputs.extension_client }}
+                VERSION: ${{ steps.set_version.outputs.version }}
+                TP_NAME: ${{ inputs.targetplatform-name }}
+                TP_VERSION: ${{ inputs.targetplatform-version }}
 
         -   name: Commit updated files
-            if: inputs.commit-changes == 'true' && steps.release_state.outputs.exists != 'true'
+            if: inputs.commit-changes == 'true'
             shell: bash
             run: |
                 set -euo pipefail
